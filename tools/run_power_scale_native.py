@@ -206,6 +206,8 @@ def main():
                 original_alive=lifetime.require_alive
                 def bounded_alive():
                     original_alive()
+                    import native_failed_preparation
+                    native_failed_preparation.recover(watcher)
                     if os.environ.get('PS2X_PACKAGE_DATA'):
                         import json
                         request=Path(os.environ['PS2X_PACKAGE_DATA'])/'restart-request.json'
@@ -214,6 +216,7 @@ def main():
                             if value.get('owner_pid')==os.getpid():raise KeyboardInterrupt
                     if deadline is not None and time.monotonic()>=deadline:raise KeyboardInterrupt
                 pine.set_runtime_guard(bounded_alive,process.pid)
+                lifetime.require_alive=bounded_alive
                 watcher.run()
         except KeyboardInterrupt:pass
         except Exception as error:

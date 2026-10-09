@@ -261,7 +261,8 @@ class Autopilot:
         self.freeze_dumped = False
         self.hold_overruns = None
         import mod_settings
-        self.diagnostic_settings=mod_settings.load_settings() if in_game_menu else dict(mod_settings.DEFAULTS)
+        import native_diagnostics
+        self.diagnostic_settings=native_diagnostics.settings(mod_settings.load_settings() if in_game_menu else dict(mod_settings.DEFAULTS))
         if in_game_menu:
             import native_mode_menu
             import mod_settings
@@ -975,7 +976,8 @@ class Autopilot:
 
     def prepare(self):
         import mod_settings
-        self.diagnostic_settings=mod_settings.load_settings()
+        import native_diagnostics
+        self.diagnostic_settings=native_diagnostics.settings(mod_settings.load_settings())
         self.result = {}
         try:
             session_type=StreamingSession if self.streaming else Session

@@ -24,22 +24,29 @@ for i,(site,target,offset) in enumerate(t.CALLS):
 # Preserve native callees' saved registers; deliberately disturb HI/FPU and
 # caller temporaries so trace logging cannot accidentally hide ABI changes.
 COUNTER_ENTRIES=(0x1CF0C8,0x1DAC78,0x1DC348,t.abi.SIDE,0x1CED60,0x20E340,0x20E3E8,0x20E3A0,0x1CE108,0x1CE198)
+def boundary(entry):
+    # Avoid crossing another compiled ELF entry with a long synthetic stub.
+    a=Assembler(PROBE+0x6000+0x200*COUNTER_ENTRIES.index(entry))
+    a.boundary_entry=entry
+    return a
+
 def finish(a):
-    counter=4*COUNTER_ENTRIES.index(a.base)
+    counter=4*COUNTER_ENTRIES.index(a.boundary_entry)
     a.li(10,PROBE+0x100);a.lw(11,10,counter);a.addiu(11,11,1);a.sw(11,10,counter)
     a.li(10,0x13579);a.r(24,0,10,10);a.emit((28<<26)|(10<<21)|(10<<16)|24)
     a.li(10,0x3F012345);a.emit((17<<26)|(4<<21)|(10<<16)|(7<<11))
     a.jr();body=a.finish();ram[a.base:a.base+len(body)]=body
+    struct.pack_into('<2I',ram,a.boundary_entry,(2<<26)|(a.base>>2),0)
 for entry,refusal in ((0x1CF0C8,1),(0x1DAC78,2),(0x1DC348,3),(t.abi.SIDE,4),(0x1CED60,5)):
-    a=Assembler(entry);a.li(9,PROBE);a.lw(2,9);a.addiu(10,0,refusal);a.r(0x26,2,2,10);a.i(11,2,2,1)
+    a=boundary(entry);a.li(9,PROBE);a.lw(2,9);a.addiu(10,0,refusal);a.r(0x26,2,2,10);a.i(11,2,2,1)
     if refusal in (4,5):a.i(14,2,2,1)
     finish(a)
 for entry,value in ((0x20E340,195),(0x20E3E8,300000)):
-    a=Assembler(entry);a.li(2,value);finish(a)
-a=Assembler(0x20E3A0);a.addiu(2,6,100);finish(a)
-a=Assembler(0x1CE108);a.li(9,PROBE);a.lw(10,9,8);a.addiu(11,10,100);a.addiu(2,0,-1)
+    a=boundary(entry);a.li(2,value);finish(a)
+a=boundary(0x20E3A0);a.addiu(2,6,100);finish(a)
+a=boundary(0x1CE108);a.li(9,PROBE);a.lw(10,9,8);a.addiu(11,10,100);a.addiu(2,0,-1)
 a.branch(5,5,11,'end');a.move(2,10);a.label('end');finish(a)
-a=Assembler(0x1CE198);t.abi.row_address(a,2,4,5,10);a.addiu(2,2,0x40);finish(a)
+a=boundary(0x1CE198);t.abi.row_address(a,2,4,5,10);a.addiu(2,2,0x40);finish(a)
 # build_memory guards must accept only the owned SIDE predecessor and preserve
 # every native delay slot; occupied or unknown callsites are rejected.
 check=bytearray(ram)

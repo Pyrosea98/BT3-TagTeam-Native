@@ -136,11 +136,7 @@ def preview_diagnostic_settings(settings,enabled):
 
 
 def play():
-    diagnostics=configure_preview_diagnostics()
-    sys.path.insert(0,str(HERE/'power-scale-trial/controller/game/tools'))
-    import mod_settings
-    original_load_settings=mod_settings.load_settings
-    mod_settings.load_settings=lambda *args,**kwargs:preview_diagnostic_settings(original_load_settings(*args,**kwargs),diagnostics)
+    configure_preview_diagnostics()
     sys.path.insert(0,str(HERE))
     import run_power_scale_native as launch
     launch.TRIAL=HERE/'power-scale-trial';launch.TOOLS=launch.TRIAL/'controller/game/tools';launch.REPO=APP/'resources/native-port/repo'

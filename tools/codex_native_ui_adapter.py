@@ -170,6 +170,9 @@ class Presentation:
 def install():
     import pine,autopilot,fresh_team_trainer,loading_presentation,ingame_settings as settings
     import feature_preferences,mod_settings
+    # These controls have no supported effect in the native release.
+    hidden={'widescreen_patch','fast_disc_loading','emulated_cpu_speed','native_mode_cover'}
+    mod_settings.GROUPS=tuple((name,tuple(key for key in keys if key not in hidden)) for name,keys in mod_settings.GROUPS)
     import localization
     localization.ES['Show credits at startup']='Mostrar creditos al inicio'
     import json

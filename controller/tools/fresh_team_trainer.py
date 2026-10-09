@@ -414,6 +414,8 @@ class Session:
         # Snapshot once, before claiming files or touching the emulator. An
         # edit in the settings window applies to the next prepared match.
         self.settings = mod_settings.load_settings() if settings is None else mod_settings.validate_settings(settings)
+        import native_diagnostics
+        self.settings=native_diagnostics.settings(self.settings)
         if battle_mode not in ('teams','ffa','coop','training','training_coop') or humans not in battle_mode_policy.HUMAN_COUNTS:raise ValueError('Invalid match mode')
         if battle_mode in ('coop','training_coop') and humans not in (2,3,4):raise ValueError('Co-op requires two, three or four human players')
         if battle_mode=='training' and humans==0:raise ValueError('Modded Training requires one to four human players')

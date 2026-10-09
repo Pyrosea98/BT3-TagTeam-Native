@@ -4,6 +4,12 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 def main(runner_name=None):
     if (HERE/'GAME_LOCK').exists():raise RuntimeError('GAME_LOCK is owned by another session')
+    # Developer trials retain the evidence needed for unfinished fusion bugs.
+    # Installed packages set their own preview/public choice before this call.
+    os.environ.setdefault('BT3_PREVIEW_DIAGNOSTICS','1')
+    if os.environ['BT3_PREVIEW_DIAGNOSTICS']=='1':
+        os.environ.setdefault('PS2X_STALL_INTERP','1')
+        os.environ.setdefault('PS2X_STALL_HISTORY','1')
     import run_power_scale_native as launch
     from codex_import_native_ui import DEFAULT
     manifest=DEFAULT/'manifest.json'
@@ -28,7 +34,7 @@ def main(runner_name=None):
     os.environ['PS2X_NATIVE_UI_BOOT_CREDITS']='1' if first_import or settings.get('show_credits_at_startup',True) else '0'
     os.environ['PS2X_NATIVE_UI_LANGUAGE']=settings.get('language','en')
     os.environ['PS2X_NATIVE_UI_MENU_CREDITS']='1'
-    name=runner_name or 'ps2EntryRunner-branding-fusion-review.exe'
+    name=runner_name or 'ps2EntryRunner-four-seat-fusion-review.exe'
     if Path(name).name!=name or not name.startswith('ps2EntryRunner-') or not name.endswith('.exe'):
         raise ValueError('Invalid native diagnostic runner')
     if '--trace-scene-writes' in sys.argv:
@@ -52,7 +58,7 @@ def main(runner_name=None):
     if '--baseline-native-leaves' in sys.argv:
         sys.argv.remove('--baseline-native-leaves')
         os.environ['PS2X_NATIVE_LEAVES']='0'
-    launch.RUNNER_FEATURES[name]=frozenset(('rematch','roster')) | (frozenset(('seat-pads',)) if name in ('ps2EntryRunner-four-seat-review.exe','ps2EntryRunner-four-seat-fusion-review.exe') else frozenset())
+    launch.RUNNER_FEATURES[name]=frozenset(('rematch','roster')) | (frozenset(('seat-pads',)) if name in ('ps2EntryRunner-four-seat-review.exe','ps2EntryRunner-four-seat-fusion-review.exe','ps2EntryRunner-standalone.exe') else frozenset())
     if '--runner' in sys.argv or '--no-controller' in sys.argv:raise ValueError('This slice requires its runner and controller')
     sys.argv.extend(('--runner',name))
     lock=HERE/'GAME_LOCK'

@@ -55,7 +55,7 @@ branding=HERE/'ui-assets/branding'
 if branding.is_dir():
     shutil.copytree(branding,RESOURCE/'ui-assets/branding',dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
 runner=RESOURCE/'repo/build/ps2xRuntime'
-copy(Path(os.environ.get('BT3_PACKAGE_RUNNER',str(HERE/'repo/build/ps2xRuntime/ps2EntryRunner-reviewed-cpu-forms.exe'))),runner/'ps2EntryRunner-standalone.exe')
+copy(Path(os.environ.get('BT3_PACKAGE_RUNNER',str(HERE/'repo/build/ps2xRuntime/ps2EntryRunner-four-seat-fusion-review.exe'))),runner/'ps2EntryRunner-standalone.exe')
 for path in (HERE/'repo/build/ps2xRuntime').glob('*.dll'):copy(path,runner/path.name)
 for path in (HERE/'stock-deploy').glob('*.dll'):
     if path.name.startswith(('msvcp','vcruntime')):
@@ -87,6 +87,8 @@ notices=OUT/'notices'
 for name in ('LICENSE.txt',):copy(base/name,notices/('Python-'+name))
 for path in (HERE/'font-candidates').glob('*OFL.txt'):copy(path,notices/path.name)
 copy(HERE/'repo/LICENSE',notices/'BT3-Recomp-LICENSE')
+for path in sorted((HERE/'installer/notices-extra').glob('*.txt')):
+    copy(path,notices/path.name)
 copy(HERE/'repo/build/ps2xRuntime/fps60_sites.txt',RESOURCE/'runtime-data/fps60_sites.txt')
 for name in ('RussoOne-Regular.ttf','OFL.txt'):
     copy(HERE/'repo/ps2xRuntime/assets/fonts'/name,RESOURCE/'runtime-data/assets/fonts'/name)

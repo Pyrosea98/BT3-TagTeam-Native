@@ -11,8 +11,12 @@ NP = Path(__file__).resolve().parent
 WS = NP.parent
 OUT = WS / 'repo-staging' / 'BT3-TagTeam-Native'
 if OUT.exists():
-    shutil.rmtree(OUT)
-OUT.mkdir(parents=True)
+    # keep the git history (branches, remotes); only the working tree is regenerated
+    for child in OUT.iterdir():
+        if child.name == '.git':
+            continue
+        shutil.rmtree(child) if child.is_dir() else child.unlink()
+OUT.mkdir(parents=True, exist_ok=True)
 
 SUSPECT = re.compile(rb'(JUAN|pyrosea|julianalvarez|C:\\\\Users|C:/Users)', re.I)
 entries = []
@@ -36,7 +40,7 @@ def put_glob(base: Path, patterns, dst_dir: str, exclude=()):
 
 
 # docs (not the internal COLLAB chat)
-put_glob(NP, ['*.md'], 'docs', exclude=['COLLAB.md', 'ROADMAP.md.bak'])
+put_glob(NP, ['*.md'], 'docs', exclude=['COLLAB.md', 'ROADMAP.md.bak', 'CODEX_PROMPT.md'])
 # root tooling scripts written for the project
 put_glob(NP, ['*.py', '*.cmd', '*.cjs', '*.cpp'], 'tools', exclude=['tmp*'])
 # controller (embedded mod logic, GPL-derived) and overlay
