@@ -2,6 +2,10 @@
 
 A standalone Windows build of **Dragon Ball Z: Budokai Tenkaichi 3 (Power Scale BETA 1.5.1)** with the **Tag Team mod** built in. It runs on a native static-recompilation runtime instead of an emulator, with the mod's logic embedded, a native Vulkan interface (overhead HUD, fusion and revive indicators, menus, credits), up to five fighters per side, free-for-all, co-op and Modded Training, native CPU tactics, and an installer that imports **your own** disc image.
 
+## Built on The Mufti's Tag Team Mod
+
+This project exists because of **[The Mufti's Tag Team Mod](https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-)** (GPL-3.0), which adds simultaneous fighters, teams, free-for-all, split screen and much more to Budokai Tenkaichi 3 on PCSX2. The game logic in `controller/` comes from that mod and is adapted here to run natively with the Power Scale BETA 1.5.1 roster. If you want the original emulator-based mod, an experimental online mode, Linux builds or the Workbench tools, use the upstream project: [releases](https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-/releases) and [channel](https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A). Please send gameplay credit and thanks there.
+
 > Unofficial fan project. Not affiliated with or endorsed by the owners of Dragon Ball or Budokai Tenkaichi.
 > **No game files are included in this repository** (no disc images, executables, game archives, extracted art, saves or captures). You must supply your own Power Scale BETA 1.5.1 disc image.
 
