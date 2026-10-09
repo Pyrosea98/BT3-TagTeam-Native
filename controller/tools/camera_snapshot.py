@@ -2,7 +2,7 @@
 
 No emulator connection, process-memory access or game mutation.
 """
-from native_map import A
+from native_map import A, FLAG
 import argparse
 import json
 import os
@@ -78,8 +78,9 @@ def inspect(ram):
     u = lambda address: struct.unpack_from('<I', ram, address)[0]
     signed = lambda address: struct.unpack_from('<i', ram, address)[0]
     vec = lambda address: list(struct.unpack_from('<3f', ram, address))
-    flag = lambda actor, index: bool((ram[actor + 4229 + (index >> 3)] |
-                                     ram[actor + 4269 + (index >> 3)]) & (1 << (index & 7)))
+    # index: a USA native actor-flag number (keys below stay USA numbers); FLAG gives this disc's number.
+    flag = lambda actor, index: bool((ram[actor + 4229 + (FLAG(index) >> 3)] |
+                                     ram[actor + 4269 + (FLAG(index) >> 3)]) & (1 << (FLAG(index) & 7)))
     manager, active, cinematic = u(CAMERA_MANAGER), u(ACTIVE_CAMERA), u(CINEMATIC_CAMERA)
     actor_manager = u(A(0x2FEB14))
     actor_pointers = [u(actor_manager + 4), u(actor_manager + 4) + 0x1600,

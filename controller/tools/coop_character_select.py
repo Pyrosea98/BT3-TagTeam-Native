@@ -13,12 +13,13 @@ from prototype import Assembler
 import mode_menu
 import roster_selection_guard as guard
 from native_map import GPO
+from regional import MENU_BACK
 
 CODE,DRAW,DATA,END=0x07699000,0x07699900,0x0769A000,0x076A0000
 CONTROL=guard.CONTROL
 ENABLED,OWNER,SEAT,READY,VISIBLE,SHOW_HINT=0x80,0x84,0x88,0x8C,0x90,0x94
 ALL_CONTROLLERS=0xE0
-BACK=0x400  # Native translated Triangle, including controller reassignment.
+BACK=MENU_BACK  # Native translated back (USA/Europe Triangle, Japan Cross), including controller reassignment.
 SLOT_SEATS=(0,1,0,0,0)
 PAD_STRIDE=0x1C0
 # These are the native reads and accepted-pick writes that make delegation safe.

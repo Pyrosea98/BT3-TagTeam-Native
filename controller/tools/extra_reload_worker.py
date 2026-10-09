@@ -118,7 +118,12 @@ def capacity_shortage(ram):
     models=[u(ram,runner.core.MODELS+4*i) for i in range(12)]
     occupied=sum(1 for m in models if 0x100000<=m<=len(ram)-8 and u(ram,m+4))
     if occupied>=12 or not u(ram,pool+69128):return 'no spare model slot'
-    if (u(ram,pool+439156)&0x7FFF).bit_count()>=13:return 'no spare texture group'
+    # The two-spare policy reads the raw mask, exactly as the guest form
+    # admission does. Staging also needs one group no live model uses: a
+    # transient's destructor can clear a live group's bit, which staging
+    # re-marks (extra_reload_stage.texture_groups).
+    if ((u(ram,pool+439156)&0x7FFF).bit_count()>=13 or
+            stage.texture_groups(ram)['group'] is None):return 'no spare texture group'
     # Host-side: the real per-file ceiling, whatever the installed build.
     if largest_free_block(ram)<heap.NEED:return 'not enough free memory'
     return None
@@ -286,7 +291,7 @@ class Worker:
             if all(p.read(at,len(data))==data for at,data in expected):break
         else:
             raise ValueError('Prepared match is missing the reviewed extra reload service')
-        self.capacity=capacity;self.forms=forms;self.background=background
+        self.capacity=capacity;self.forms=forms;self.background=background;self.pieces=expected
         import extra_reload_forms as form_module
         manager=p.read_u32(runner.core.ACTORS);count=p.read_u32(requests.CONTROL+8)
         if (count not in ACTOR_COUNTS or p.read_u32(requests.CONTROL+4)!=manager or
@@ -300,13 +305,26 @@ class Worker:
             raise ValueError('Restart this prepared match before reattaching a background reload worker')
         if any(p.read_u32(module.CONTROL+4) for module in (io,stage,commit,retire)):
             raise ValueError('Restart this prepared match before reattaching a completed reload worker')
-        if not native.arm(p):raise ValueError('Restart the launcher to install native reload transport')
+        if not native.arm(p):raise ValueError('The fighter update service is not installed in this PCSX2. Close PCSX2, '
+                                              'then start {play} again.'.format(play=native.launcher()))
         if self.forms:
             if tuple(p.read_u32(form_module.CONTROL+off) for off in (4,8))!=(manager,count):
                 raise ValueError('Ordinary form service belongs to another match')
             p.write_u32(form_module.CONTROL,1);p.write_u32(form_module.FORM_ENABLE,1)
             auxiliary.arm(p,self.cell_auxiliary)
         p.write_u32(requests.CONTROL,1);self.active=True;self.failure=None;return self
+
+    def installed(self,p):
+        """The reload service this worker attached to is still this match's: the MODE and
+        service words attach checked and the exact program bytes it verified. Reads only (no
+        claim, no write); the watcher checks a worker it parked for a moment out of combat
+        before it reuses it (match F1)."""
+        manager=p.read_u32(runner.core.ACTORS);count=p.read_u32(requests.CONTROL+8)
+        if (count not in ACTOR_COUNTS or p.read_u32(requests.CONTROL+4)!=manager or
+                p.read_u32(runner.core.MODE)!=1 or p.read_u32(runner.core.MODE+8)!=manager or
+                p.read_u32(runner.core.MODE+4)!=count or p.read_u32(runner.core.MODE+12)!=count or
+                p.read_u32(runner.CONTROL)!=runner.MAGIC):return False
+        return all(p.read(at,len(data))==data for at,data in getattr(self,'pieces',()))
 
     def _background_service(self,p):
         """Is the optional unheld IO driver installed for THIS emission?
@@ -469,27 +487,18 @@ class Worker:
                  data_hex=data.hex()) for at,data in publication])
         before=time.perf_counter();self.apply(p,transaction);self.owned[name]=manifest
         self.timings.append((name+' publish',time.perf_counter()-before));before=time.perf_counter()
-        deadline=self.clock()+90
-        while self.clock()<deadline:
+        # Running time only: a PCSX2 paused during the stage is waited for.
+        budget=native.RunningTime(p,90,clock=self.clock)
+        while True:
             if p.read_u32(runner.CONTROL+8)==request:
                 status=p.read_u32(runner.CONTROL+12)
                 if status!=5 or p.read_u32(control+4)!=5:
-                    detail=''
-                    if status==145 and name=='commit':
-                        try:
-                            import fusion_partner_lifecycle as fusion
-                            count,partner,owner,error=(p.read_u32(fusion.CONTROL+offset)
-                                for offset in (16,20,24,28))
-                            detail=(f' (fusion commits={count}, consumed physical={partner}, '
-                                    f'owner=0x{owner:08X}, fusion error={error}, '
-                                    f'reload actor=0x{job.get("actor",0):08X}, action={job.get("owner_action")})')
-                        except Exception:
-                            detail=' (fusion diagnostic unavailable)'
-                    raise RuntimeError(f'Extra reload {name} failed with status {status}{detail}; match remains held')
+                    raise RuntimeError(f'Extra reload {name} failed with status {status}; match remains held')
                 self.timings.append((name+' guest',time.perf_counter()-before))
                 return
+            if budget.expired():break
             self.sleep(.02)
-        raise TimeoutError(f'Extra reload {name} did not finish; match remains held')
+        raise TimeoutError(f'Extra reload {name} did not finish within 90 s of running time; match remains held')
 
     def waiting_reason(self,p):
         """Why a published request is not being claimed, in one short phrase.
@@ -579,6 +588,7 @@ class Worker:
             self._install_stage(p,'io',ram,manifest,job)
             ram=self._snapshot(p);view=self._analysis_view_for(ram,('stage','commit'))
             self._install_stage(p,'stage',ram,self._build('stage',stage.build_memory,view,quiet=True,allow_forms=self.forms),job)
+            self._group_note(p)
             if job['form']:
                 ram=self._snapshot(p)
                 self.apply(p,dict(blocks=[word_block(ram,job['row']+4,3)]))
@@ -594,7 +604,7 @@ class Worker:
             self.apply(p,dict(blocks=[word_block(ram,job['row']+52,5),word_block(ram,job['row']+4,5)]))
             self.progress('Fighter costume updated');self._release(p);return True
         except Exception as exc:
-            self.failure=str(exc);self.progress(self.failure);raise
+            import player_errors;self.failure=player_errors.short(exc);self.progress(self.failure);raise
 
     def _waiting(self,p):
         """Report a stalled request once per distinct reason, then stay quiet."""
@@ -604,6 +614,13 @@ class Worker:
             self.waiting=reason
             self.progress(f'Waiting to load a transformation: {reason}')
         return False
+
+    def _group_note(self,p):
+        """Log when staging re-marked a live model's texture group (TTM-MATCH-08 cause) or missed its choice."""
+        repaired,chosen,staged=struct.unpack('<3I',p.read(stage.CONTROL+80,12))
+        if repaired or staged!=chosen:
+            live=[g for g in range(stage.GROUPS) if repaired>>g&1]
+            self.progress(f'Texture group check: re-marked live group(s) {live}; staged on {staged}, chosen {chosen}')
 
     # ---- unheld background transformation IO -----------------------------
     #
@@ -738,7 +755,7 @@ class Worker:
                           f'({p.read_u32(io.CONTROL+io.POLLS)} loader polls)')
             return self._stage_background(p,job)
         except Exception as exc:
-            self.failure=str(exc);self.progress(self.failure);raise
+            import player_errors;self.failure=player_errors.short(exc);self.progress(self.failure);raise
 
     def _stage_background(self,p,job):
         """Second short hold: today's staging, then row+4=3, then release."""
@@ -755,6 +772,7 @@ class Worker:
             self.progress(f'Transformation staging refused: {error}')
             return self._abort_form(p,130,held=True,orphaned=True)
         self._install_stage(p,'stage',ram,manifest,job)
+        self._group_note(p)
         ram=self._snapshot(p)
         self.apply(p,dict(blocks=[word_block(ram,job['row']+4,3)]))
         self.form_phase='commit';self.form_frame=p.read_u32(native.CONTROL+40)
@@ -833,7 +851,7 @@ class Worker:
             self.apply(p,dict(blocks=[word_block(ram,job['row']+52,5),word_block(ram,job['row']+4,5)]))
             self.form_job=None;self.progress('Transformation complete');self._release(p);return True
         except Exception as exc:
-            self.failure=str(exc);self.progress(self.failure);raise
+            import player_errors;self.failure=player_errors.short(exc);self.progress(self.failure);raise
 
     def _complete_resources(self,p,ram,job):
         """Retain initial bundles; recycle only this Worker's prior receipts."""

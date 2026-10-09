@@ -6,7 +6,7 @@ service may publish its rebuilt original body and reactivate its real partner.
 Preselected fusion characters never get receipts. Optional lore rules admit
 reviewed mortal Potara recipes as well as Fusion Dance.
 """
-from native_map import A
+from native_map import A, FLAG
 import struct
 import localization
 from prototype import Assembler
@@ -143,7 +143,7 @@ def tick():
     for off in (2380,2388,2392,2396,2400):a.lw(8,18,off);a.addiu(9,0,-1);a.branch(5,8,9,'next')
     for off in (3480,3500,3512):a.lw(8,18,off);a.branch(5,8,0,'next')
     for bank in (0x1085,0x10AD):
-        a.i(36,8,18,bank+(0x94>>3));a.i(12,8,8,1<<(0x94&7));a.branch(5,8,0,'next')
+        a.i(36,8,18,bank+(FLAG(0x94)>>3));a.i(12,8,8,1<<(FLAG(0x94)&7));a.branch(5,8,0,'next')
     a.li(8,body.CONTROL);a.lw(9,8);a.li(10,body.MAGIC);a.branch(5,9,10,'body_free')
     a.lw(9,8,16);a.branch(5,9,0,'next');a.label('body_free')
     a.lw(19,28,-22364)

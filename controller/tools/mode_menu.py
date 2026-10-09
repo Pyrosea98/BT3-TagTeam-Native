@@ -5,6 +5,7 @@ a short lease; without it the original menu remains usable. Choosing a match
 uses the native Duel accept path, preserving its resource cleanup/fades.
 """
 from native_map import A, elf_path
+from regional import MENU_ACCEPT, RAW_ACCEPT, RAW_BACK
 import struct
 import time
 from prototype import Assembler, ROOT, elf_reader
@@ -54,9 +55,10 @@ def payload():
     a.label('down');a.i(12,10,13,0x40);a.branch(4,10,0,'accept')
     a.addiu(14,14,1);a.i(11,10,14,len(OPTIONS));a.branch(5,10,0,'store');a.move(14,0)
     a.label('store');a.sw(14,8,8)
-    a.label('accept');a.i(12,10,13,0x1000);a.branch(4,10,0,'cross')
+    # The disc's back / accept buttons (USA and Europe: Triangle / Cross; Japan: Cross / Circle).
+    a.label('accept');a.i(12,10,13,RAW_BACK);a.branch(4,10,0,'cross')
     a.addiu(14,0,RETURN_CHOICE);a.jump('commit')
-    a.label('cross');a.i(12,10,13,0x4000);a.branch(4,10,0,'return')
+    a.label('cross');a.i(12,10,13,RAW_ACCEPT);a.branch(4,10,0,'return')
     a.label('commit');a.addiu(10,14,1);a.sw(10,8,12);a.addiu(10,0,2);a.sw(10,8,4)
     a.lw(10,8,36);a.addiu(10,10,1);a.sw(10,8,36)
     a.addiu(10,0,RETURN_CHOICE);a.branch(4,14,10,'return')
@@ -68,7 +70,7 @@ def payload():
     a.label('native_duel')
     # Select native Duel and let its normal acceptance code transition.
     a.sw(0,11,0x10C);a.addiu(10,0,2);a.sw(10,11,0x148)
-    a.addiu(10,0,0x200);a.sw(10,12,0x18C);a.jump('return')
+    a.addiu(10,0,MENU_ACCEPT);a.sw(10,12,0x18C);a.jump('return')
     a.label('duel_route');a.lw(10,8,20);a.branch(4,10,0,'return')
     a.lw(11,8,32);a.addiu(12,0,38);a.branch(5,11,12,'return')
     a.lw(11,8,44);a.branch(4,11,0,'expired');a.addiu(11,11,-1);a.sw(11,8,44)
@@ -103,7 +105,7 @@ def payload():
     a.jump('route_accept')
     a.label('team_kind');a.addiu(14,0,2);a.branch(5,10,14,'return')
     a.addiu(14,0,1);a.branch(5,13,14,'return');a.sw(14,11,0x114)
-    a.label('route_accept');a.addiu(10,0,0x200);a.sw(10,12,0x18C);a.jump('return')
+    a.label('route_accept');a.addiu(10,0,MENU_ACCEPT);a.sw(10,12,0x18C);a.jump('return')
     a.label('route_done');a.sw(0,8,20);a.jump('return')
     a.label('expired');a.sw(0,8,4);a.sw(0,8,20)
     a.label('return')

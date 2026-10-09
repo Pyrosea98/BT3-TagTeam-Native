@@ -35,7 +35,12 @@ def wrapper_code():
     data=a.finish(); assert len(data)<=DECIDE-CODE; return data
 
 
-def decide_code(*, legacy=False):
+def decide_code(*, legacy=False, kernel_scratch=False):
+    # k0/k1 belong to the EE kernel: its interrupt entry overwrites them and never restores them (LS-2 rig run
+    # D0011: an interrupt between 'lui/ori k0' and 'lw t0,0(k0)' left k0 = COP0 Status 0x70030C17; the load
+    # TLB-missed forever and the match hung). a2/a3 are free here: the wrapper saves every GPR. The legacy and
+    # kernel_scratch (beta.33) forms rebuild the bytes older releases installed, for in-place upgrades.
+    k0,k1=(26,27) if legacy or kernel_scratch else (6,7)
     a=Assembler(DECIDE); pause.mode_gate(a,'native',include_all=not legacy)
     a.li(8,CONTROL);a.lw(9,8);a.li(11,MAGIC);a.branch(5,9,11,'native')
     a.lw(9,8,4);a.lw(11,28,-22364);a.branch(5,9,11,'native')
@@ -44,11 +49,11 @@ def decide_code(*, legacy=False):
     for r in (21,22):
         a.r(0x2B,8,r,20);a.branch(4,8,0,'native')
     a.branch(4,21,22,'native')
-    a.move(24,0);a.li(25,core.POINTERS);a.li(26,pause.CONTROL+0x80)
+    a.move(24,0);a.li(25,core.POINTERS);a.li(k0,pause.CONTROL+0x80)
     a.move(14,0);a.move(15,0)
     # Resolve current and exclusive owner by captured physical identity. Actual
     # models may be nonconsecutive, or change resources during a leader reload.
-    a.label('validate');a.lw(23,25);a.lw(8,26);a.branch(5,23,8,'native')
+    a.label('validate');a.lw(23,25);a.lw(8,k0);a.branch(5,23,8,'native')
     a.lw(8,23);a.branch(5,8,24,'native')
     a.lw(8,23,12);a.i(11,9,8,12);a.branch(4,9,0,'native')
     a.r(0,9,0,8,2);a.li(11,core.MODELS);a.r(0x2D,9,9,11);a.lw(9,9)
@@ -57,7 +62,7 @@ def decide_code(*, legacy=False):
     a.lw(11,9,16);a.branch(5,8,11,'native')
     a.branch(5,24,21,'not_current');a.branch(5,23,16,'native');a.move(14,9)
     a.label('not_current');a.branch(5,24,22,'next');a.move(15,23)
-    a.label('next');a.addiu(24,24,1);a.addiu(25,25,4);a.addiu(26,26,4)
+    a.label('next');a.addiu(24,24,1);a.addiu(25,25,4);a.addiu(k0,k0,4)
     a.branch(5,24,20,'validate')
     a.lw(8,15,2376);a.addiu(9,8,-253);a.i(11,9,9,63);a.branch(4,9,0,'native')
     # A bound subject's intentional exclusive hide stays authored. Merely
@@ -69,13 +74,13 @@ def decide_code(*, legacy=False):
         a.r(0x2B,11,r,20);a.branch(4,11,0,'native')
     a.branch(4,8,9,'native');a.branch(4,22,8,'pair_valid');a.branch(5,22,9,'native')
     a.label('pair_valid');a.branch(4,21,8,'native');a.branch(4,21,9,'native')
-    a.label('camera_check');a.lw(27,28,-22180);a.branch(4,27,0,'relax')
-    a.lw(8,27,812);a.branch(5,8,0,'camera')
-    a.lw(8,27,704);a.branch(4,8,0,'relax')
-    a.lw(8,27,776);a.i(12,8,8,3);a.addiu(9,0,1);a.branch(5,8,9,'relax')
+    a.label('camera_check');a.lw(k1,28,-22180);a.branch(4,k1,0,'relax')
+    a.lw(8,k1,812);a.branch(5,8,0,'camera')
+    a.lw(8,k1,704);a.branch(4,8,0,'relax')
+    a.lw(8,k1,776);a.i(12,8,8,3);a.addiu(9,0,1);a.branch(5,8,9,'relax')
     a.label('camera')
     for off in (768,772):
-        a.lw(13,27,off);a.branch(4,13,0,f'next{off}')
+        a.lw(13,k1,off);a.branch(4,13,0,f'next{off}')
         a.branch(4,13,14,'native')
         a.move(24,0);a.li(25,core.POINTERS)
         a.label(f'scan{off}');a.lw(8,25);a.lw(8,8,12);a.r(0,8,0,8,2)
@@ -92,8 +97,8 @@ def decide_code(*, legacy=False):
     return data if legacy else data.ljust(len(decide_code(legacy=True)),b'\0')
 
 
-def program(*, legacy=False):
-    return [(CODE,wrapper_code()),(DECIDE,decide_code(legacy=legacy)),
+def program(*, legacy=False, kernel_scratch=False):
+    return [(CODE,wrapper_code()),(DECIDE,decide_code(legacy=legacy,kernel_scratch=kernel_scratch)),
             (ENTRY,struct.pack('<2I',(2<<26)|(CODE>>2),0x0200202D))]
 
 
@@ -106,7 +111,7 @@ def build_memory(ram,config=None,source='<offline-memory>'):
     # replay against a different visibility function or patched local hides.
     for p,n in ((A(0x1C0EB8),ENTRY-A(0x1C0EB8)),(ENTRY+8,A(0x1C1040)-ENTRY-8)):
         if ram[p:p+n]!=native(p,n):raise ValueError(f'Native visibility flow changed:{p:08X}')
-    upgraded=False
+    upgraded=None
     if all(ram[p:p+len(data)]==data for p,data in program()):
         if struct.unpack_from('<3I',ram,CONTROL)!=(MAGIC,manager,count):
             raise ValueError('Visibility capture ownership mismatch')
@@ -116,7 +121,12 @@ def build_memory(ram,config=None,source='<offline-memory>'):
             raise ValueError('Visibility capture ownership mismatch')
         # Preserve capture and observation counters; only expand the existing
         # predicate to include native-pause mode. Its timing code is untouched.
-        pieces=[(DECIDE,decide_code())];upgraded=True
+        pieces=[(DECIDE,decide_code())];upgraded=2
+    elif all(ram[p:p+len(data)]==data for p,data in program(kernel_scratch=True)):
+        if struct.unpack_from('<3I',ram,CONTROL)!=(MAGIC,manager,count):
+            raise ValueError('Visibility capture ownership mismatch')
+        # The beta.33 predicate kept values in k0/k1; replace it in place, keeping capture and counters.
+        pieces=[(DECIDE,decide_code())];upgraded=3
     else:
         if ram[ENTRY:ENTRY+8]!=PRIOR:raise ValueError('Visibility hook changed')
         if any(ram[CODE:0x07525000]) or any(ram[CONTROL:CONTROL+64]):
@@ -124,7 +134,7 @@ def build_memory(ram,config=None,source='<offline-memory>'):
         control=bytearray(64);struct.pack_into('<3I',control,0,MAGIC,manager,count)
         pieces=program()+[(CONTROL,bytes(control))]
     return dict(serial=SERIAL,crc=CRC,source=str(source),control=CONTROL,
-                version=3,upgrade_from=2 if upgraded else None,
+                version=4,upgrade_from=upgraded,
                 status='ALL-MODE SPECIAL VISIBILITY; LIVE VALIDATION REQUIRED',
                 blocks=[dict(address=p,expected_hex=ram[p:p+len(d)].hex(),data_hex=d.hex()) for p,d in pieces],
                 limitations=['Only exclusive-owner hiding is relaxed for unrelated registered fighters.',

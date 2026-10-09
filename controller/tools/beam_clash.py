@@ -4,7 +4,7 @@ Only a captured 4/6 actor world is extended. Original actor/model IDs stay
 unchanged; callsite bridges translate the native struggle's two logical sides.
 The native timer, stick input, strength, damage and outcome animations remain.
 """
-from native_map import A, CRC, SERIAL, elf_path
+from native_map import A, CRC, FLAG, SERIAL, elf_path
 import struct
 from prototype import Assembler, ROOT, elf_reader
 import fresh_team_combat as core
@@ -190,8 +190,8 @@ def abort_code():
  a=Assembler(ABORT);save(a);a.call(VALID);a.branch(4,2,0,'clear')
  a.li(16,CONTROL)
  for off in (64,68):
-  a.lw(4,16,off);a.addiu(5,0,0xAA);a.call(A(0x1DAA50))
-  a.lw(4,16,off);a.addiu(5,0,0xC3);a.call(A(0x1DA9D0))
+  a.lw(4,16,off);a.addiu(5,0,FLAG(0xAA));a.call(A(0x1DAA50))
+  a.lw(4,16,off);a.addiu(5,0,FLAG(0xC3));a.call(A(0x1DA9D0))
  a.addiu(4,0,-1);a.call(A(0x174CE0))
  a.lw(8,16,4);a.lw(9,8,64);a.addiu(9,9,-1);a.i(11,9,9,5)
  a.branch(4,9,0,'clear');a.sw(0,8,64)
@@ -359,7 +359,9 @@ def build_memory(ram,config=None,source='<offline-memory>'):
  if existing:
   if ram[CONTROL:CONTROL+16]!=header[:16] or ram[CONTROL+0x100:CONTROL+0x100+4*count]!=header[0x100:0x100+4*count]:
    raise ValueError('Existing beam capture does not match')
-  for p,d in patches:
+  # beam_struggle's interference entry (8 bytes at CONTACT) is the one accepted change, while it is installed.
+  import beam_struggle
+  for p,d in beam_struggle.with_overlay(ram,patches):
    if ram[p:p+len(d)]!=d:raise ValueError(f'Changed installed beam hook{p:08X}')
   return dict(source=str(source),control=CONTROL,blocks=[],status='PAIR-OWNED BEAM CLASH ALREADY INSTALLED')
  if any(ram[CODE:END]):raise ValueError('Beam clash reservation occupied')

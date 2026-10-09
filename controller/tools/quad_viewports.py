@@ -68,8 +68,12 @@ def gate(a,fail):
     a.lw(9,8,8);a.branch(5,9,10,fail);a.lw(9,8,12);a.branch(4,9,0,fail)
 
 
-def draw():
+def draw(extensions=()):
+    """extensions: viewport_hud.hud_extensions entries (guarded caption calls after each view's revival call).
+    With none, the same bytes as before."""
     a=Assembler(DRAW);save(a);gate(a,'native')
+    import story_cinematics as story
+    story.emit_active(a,'native','not_story')
     # Keep stock intro/results and checked shared cinematics in their native
     # renderer. Free-action specials retain all four independent viewports.
     cinema.gate(a,'native',combat=False)
@@ -137,6 +141,7 @@ def draw():
             import teammate_revive as revive
             a.li(8,revive.CONTROL);a.lw(9,8);a.li(10,revive.MAGIC)
             a.branch(5,9,10,f'no_revive{side}');a.call(revive.DRAW);a.label(f'no_revive{side}')
+            hud.extension_calls(a,extensions,f'no_extension{side}_')
         a.label('effects_done')
     pair_pass('world_effects',effects)
     a.sw(0,16,16);a.call(A(0x247688))
@@ -362,8 +367,8 @@ def ot_link():
     return a.finish()
 
 
-def pieces():
-    out=[(DRAW,draw()),(SELECT,select()),(ONCE,once()),(PREPARE,prepare()),(SCISSOR,scissor()),(STAGE,stage()),(MATTE,matte())]+cache_builders()
+def pieces(extensions=()):
+    out=[(DRAW,draw(extensions)),(SELECT,select()),(ONCE,once()),(PREPARE,prepare()),(SCISSOR,scissor()),(STAGE,stage()),(MATTE,matte())]+cache_builders()
     out.extend(((OT_RESET,ot_reset()),(OT_LINK,ot_link())))
     for i,(hook,entry) in enumerate(((A(0x12B9C0),DRAW),(A(0x23EF98),SELECT),(A(0x13A388),ONCE),(A(0x101400),SCISSOR))):
         old=NATIVE(hook,8)
@@ -384,7 +389,7 @@ def build_memory(ram,subjects=(0,1,2,3),diagnostic=False):
     if len(subjects) not in (2,3,4) or any(not 0<=i<count for i in subjects):raise ValueError('Invalid multiview subjects')
     if len(set(subjects))!=len(subjects) and not diagnostic:raise ValueError('Distinct fighters required')
     if any(ram[BASE:END]):raise ValueError('Quad reservation occupied')
-    data=pieces()
+    data=pieces(hud.hud_extensions(ram))
     for start,end,_,_ in CACHE_ROUTINES:
         if ram[start:end]!=NATIVE(start,end-start):
             raise ValueError(f'Native visibility builder changed: {start:x}')

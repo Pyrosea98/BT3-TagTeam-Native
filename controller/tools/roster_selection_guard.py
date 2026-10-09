@@ -7,6 +7,7 @@ own all selection, navigation, opposite-team counts and completion behavior.
 """
 from native_map import A
 from prototype import Assembler
+from regional import MENU_ACCEPT
 import mode_menu
 
 CODE,END=0x07698000,0x0769E000
@@ -109,8 +110,8 @@ def payload():
     a.label('three_allies');a.addiu(15,0,3);a.jump('count_ready')
     a.label('four_allies');a.addiu(15,0,4)
     a.label('count_ready');a.lw(9,12,0x134);a.r(0x2B,9,9,15);a.branch(4,9,0,'done')
-    a.li(11,mode_menu.PAD);a.lw(9,11,0x18C);a.i(12,10,9,0x200)
-    a.branch(4,10,0,'done');a.li(10,0xFFFFFDFF);a.r(0x24,9,9,10);a.sw(9,11,0x18C)
+    a.li(11,mode_menu.PAD);a.lw(9,11,0x18C);a.i(12,10,9,MENU_ACCEPT)
+    a.branch(4,10,0,'done');a.li(10,0xFFFFFFFF&~MENU_ACCEPT);a.r(0x24,9,9,10);a.sw(9,11,0x18C)
     a.addiu(4,0,1);a.addiu(5,0,7);a.call(SOUND)
     a.label('done');restore(a);a.jr()
     data=a.finish();assert len(data)<END-CODE;return data

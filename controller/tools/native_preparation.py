@@ -12,6 +12,10 @@ import battle_mode_policy as policy
 
 CODE, GATE, CONTROL = 0x07680000, 0x07682000, 0x0768F000
 PACKET, CAPACITY = 0x07800000, 0x800000
+RECORD_SIZE = 16
+# Every record needs a descriptor and at least one old/new byte. The packet's
+# actual padded size remains the final limit; there is no feature-count cap.
+MAX_BLOCKS = CAPACITY // (RECORD_SIZE + 2)
 HOOK, NATIVE = A(0x12BC84), A(0x126FB0)
 MAGIC = 0x42545032
 INCLUDE_SINGLE_FFA = CONTROL+60
@@ -31,7 +35,9 @@ def restore(a):
     a.addiu(29, 29, STACK)
 
 
-def gate_code():
+def gate_code(heal_any_substate=True):
+    """heal_any_substate=False emits the beta.35/36 gate (previous_gate_images), which rewrote only phase-1
+    substates below 4."""
     import extra_reload_quiet as reload_job
     a=Assembler(GATE)
     # Keep the native predecessor's result/register behavior exactly.
@@ -56,7 +62,12 @@ def gate_code():
     a.li(9,0x7FFFE00);a.r(0x2B,10,17,9);a.branch(4,10,0,'normal')
     a.lw(8,17,260);a.li(9,A(0x2C6070));a.branch(5,8,9,'normal')
     a.lw(8,17);a.addiu(9,0,1);a.branch(5,8,9,'ready_phase')
-    a.lw(8,17,8);a.i(11,9,8,4);a.branch(4,9,0,'normal')
+    # Any phase-1 substate but 4 becomes 4 (xori, not sltiu < 4). Native code holds only 0..4 here (99 is the
+    # mode-1 path, excluded above by SCENE+8 == 0). 5..98 can only come from a store racing 217410's
+    # read-call-reread increment (217424 .. 217500/217508): beta.35/36's host-timed watcher write left 5, and
+    # phase 1 never leaves 5 by itself (217520 has no case for it; only the Start skip). This is the same
+    # frame, before 2129B0/217520 reads it, so a 5 from any source is healed before it can stall.
+    a.lw(8,17,8);a.i(14 if heal_any_substate else 11,9,8,4);a.branch(4,9,0,'normal')
     a.addiu(8,0,4);a.sw(8,17,8);a.addiu(8,0,1);a.sw(8,16,56);a.jump('normal')
     a.label('ready_phase');a.addiu(8,8,-2);a.i(11,9,8,2);a.branch(4,9,0,'normal')
     a.li(8,A(0x2FEB14));a.lw(17,8)
@@ -74,6 +85,15 @@ def gate_code():
         a.lw(8,18,offset+0x9E4);a.branch(6,8,0,'normal')
     a.sw(17,16,24);a.addiu(8,0,1);a.sw(8,16,16);a.sw(8,16,52)
     a.label('held');a.addiu(8,0,1);a.sw(8,16,20)
+    import story_cinematics as story
+    story.emit_active(a,'story_held','not_story')
+    a.jump('other_held');a.label('story_held');a.call(story.TICK)
+    # Completion restored the original camera. Resume its draw layout in this
+    # same frame, rather than binding a split camera to the full-screen pass.
+    a.li(8,story.CONTROL+12);a.lw(8,8);a.addiu(8,8,-1);a.i(11,8,8,2)
+    a.branch(4,8,0,'held_uncovered')
+    restore(a);a.move(2,0);a.addiu(31,31,24);a.jr()
+    a.label('other_held')
     # A bounded reload may use the same acknowledged combat hold. The runner
     # validates its owner and IO/stage/commit/retire allowlist before each call.
     a.li(8,reload_job.CONTROL);a.lw(8,8);a.li(9,reload_job.MAGIC)
@@ -121,7 +141,12 @@ def gate_code():
     result=a.finish();assert len(result)<0x2000;return result
 
 
-def service_code():
+def protected_ranges():
+    return ((CODE,CONTROL+0x100),(PACKET,PACKET+CAPACITY),(HOOK,HOOK+4),
+            (A(0x102098),A(0x10209C)),(0x07470000,0x07471000))
+
+
+def service_code(*, legacy_block_limit=False):
     a=Assembler(CODE);save(a);a.li(16,CONTROL)
     a.lw(8,16);a.li(9,MAGIC);a.branch(5,8,9,'done')
     a.lw(8,16,40);a.addiu(8,8,1);a.sw(8,16,40)
@@ -130,7 +155,10 @@ def service_code():
     a.lw(8,16,20);a.branch(4,8,0,'done') # wait until dispatch has stopped
     a.li(8,A(0x2FEB14));a.lw(8,8);a.lw(9,16,24);a.branch(5,8,9,'scope_error')
     a.li(8,A(0x3337C0));a.lw(8,8);a.addiu(9,0,1);a.branch(5,8,9,'scope_error')
-    a.lw(18,16,28);a.addiu(8,18,-1);a.i(11,8,8,1024);a.branch(4,8,0,'bounds_error')
+    a.lw(18,16,28);a.addiu(8,18,-1)
+    if legacy_block_limit:a.i(11,8,8,1024)
+    else:a.li(9,MAX_BLOCKS);a.r(0x2B,8,8,9)
+    a.branch(4,8,0,'bounds_error')
     a.lw(19,16,32);a.li(8,CAPACITY+1);a.r(0x2B,8,19,8);a.branch(4,8,0,'bounds_error')
     a.r(0,8,0,18,4);a.r(0x2B,9,19,8);a.branch(5,9,0,'bounds_error')
     a.li(20,PACKET);a.move(21,0)
@@ -142,7 +170,7 @@ def service_code():
     a.li(12,0x08000000);a.r(0x2B,13,8,12);a.branch(4,13,0,'bounds_error')
     a.r(0x23,12,12,8);a.r(0x2B,12,12,9);a.branch(5,12,0,'bounds_error')
     # The transport and staging packet must never overwrite themselves.
-    for lo,hi in ((CODE,CONTROL+0x100),(PACKET,PACKET+CAPACITY),(HOOK,HOOK+4),(A(0x102098),A(0x10209C)),(0x07470000,0x07471000)):
+    for lo,hi in protected_ranges():
         a.li(12,hi);a.r(0x2B,12,8,12);a.branch(4,12,0,f'outside_{lo:x}')
         a.r(0x2D,13,8,9);a.li(12,lo);a.r(0x2B,12,12,13);a.branch(5,12,0,'bounds_error')
         a.label(f'outside_{lo:x}')
@@ -179,10 +207,59 @@ def service_code():
 HOOK_WORD=struct.pack('<I',(3<<26)|(GATE>>2))
 
 
+def previous_gate_images():
+    """Gate images a prepared capture or preset may hold instead of the current gate; captured_transport and
+    preset_cosmetics.transport_memory accept them and the transport rewrites them to gate_code(). In order,
+    de-duplicated:
+    - gate_code(heal_any_substate=False): this build's gate with the beta.35/36 phase-1 rewrite (sltiu < 4, not
+      xori != 4; one word, GATE+0x220);
+    - the gate beta.35/36 actually shipped for this adapter, frozen in dispatch_gate_history (sha256 pinned in
+      test_native_preparation). Only that copy is exact once the gate changes elsewhere; a rebuild is not.
+    Skipped for an adapter those releases did not ship."""
+    import native_map
+    import dispatch_gate_history as history
+    images=[gate_code(heal_any_substate=False)]
+    shipped=history.beta36_image(native_map.ADAPTER)
+    if shipped is not None and shipped not in images:images.append(shipped)
+    return tuple(images)
+
+
 def code_pieces():
     native=elf_reader(elf_path(ROOT))[2]
     assert native(HOOK,8)==struct.pack('<2I',(3<<26)|(NATIVE>>2),0)
     return [(CODE,service_code()),(GATE,gate_code()),(HOOK,HOOK_WORD)]
+
+
+def previous_service_images():
+    """Exact old 1,024-record validator for authenticated capture upgrades."""
+    return (service_code(legacy_block_limit=True),)
+
+
+def captured_transport(ram):
+    """A captured 128 MiB image holds this build's transport, or the same one with a previous gate image
+    (previous_gate_images). Live checks keep installed(): the boot pnach is always current there."""
+    for addr,data in code_pieces():
+        accepted=(data,)
+        if addr==CODE:
+            accepted+=tuple(old+bytes(len(data)-len(old)) for old in previous_service_images() if len(old)<=len(data))
+        if addr==GATE:
+            # A shorter earlier gate is followed by the zeros of its reservation, as in preset_cosmetics.
+            accepted+=tuple(old+bytes(len(data)-len(old)) for old in previous_gate_images() if len(old)<=len(data))
+        if bytes(ram[addr:addr+len(data)]) not in accepted:return False
+    return True
+
+
+def upgrade_blocks(ram):
+    """Upgrade only a fully authenticated, dormant captured transport.
+
+    This is used when staging a rematch, before its emulator state is loaded;
+    it must never be submitted through the transport to overwrite itself.
+    """
+    if not captured_transport(ram):raise ValueError('Captured native preparation service changed')
+    u=lambda p:struct.unpack_from('<I',ram,p)[0]
+    if u(CONTROL+4)!=u(CONTROL+8):raise ValueError('Captured native preparation transaction is pending')
+    return [dict(address=p,expected_hex=ram[p:p+len(data)].hex(),data_hex=data.hex())
+            for p,data in code_pieces() if ram[p:p+len(data)]!=data]
 
 
 def installed(p):
@@ -192,14 +269,25 @@ def installed(p):
 def encode(manifest):
     from fresh_team_trainer import merge_manifests
     blocks=merge_manifests(manifest)['blocks']
-    if not 1<=len(blocks)<=1024: raise ValueError('Invalid native preparation block count')
-    packet=bytearray(16*len(blocks))
+    if not 1<=len(blocks)<=MAX_BLOCKS:
+        raise ValueError(f'Invalid native preparation block count: {len(blocks)} blocks for {CAPACITY} bytes of staging storage')
+    # Plan the complete padded packet before allocating/publishing it. A bad
+    # destination or oversized payload cannot leave a half-published request.
+    records=[];size=RECORD_SIZE*len(blocks)
     for i,b in enumerate(blocks):
         old,new=bytes.fromhex(b['expected_hex']),bytes.fromhex(b['data_hex']);address=b['address']
-        packet.extend(bytes((-len(packet))%4));before=len(packet);packet.extend(old)
-        packet.extend(bytes((-len(packet))%4));after=len(packet);packet.extend(new)
-        struct.pack_into('<4I',packet,i*16,address,len(new),before,after)
-    if len(packet)>CAPACITY:raise ValueError('Native preparation packet exceeds reserved storage')
+        if address<0x30000:raise ValueError(f'Native preparation destination is outside patch memory: {address:08X}')
+        if any(address<hi and lo<address+len(new) for lo,hi in protected_ranges()):
+            raise ValueError(f'Native preparation destination overlaps protected memory: {address:08X}')
+        size+=(-size)%4;before=size;size+=len(old)
+        size+=(-size)%4;after=size;size+=len(new)
+        records.append((address,old,new,before,after))
+    if size>CAPACITY:
+        raise ValueError(f'Native preparation packet exceeds reserved storage: {size} bytes required, {CAPACITY} available ({len(blocks)} blocks)')
+    packet=bytearray(size)
+    for i,(address,old,new,before,after) in enumerate(records):
+        packet[before:before+len(old)]=old;packet[after:after+len(new)]=new
+        struct.pack_into('<4I',packet,i*RECORD_SIZE,address,len(new),before,after)
     return bytes(packet),len(blocks)
 
 
@@ -221,15 +309,62 @@ def disarm(p):
     return True
 
 
+def launcher(name='play'):
+    """This installation's launcher for a next step in a message (localization.entry, group A):
+    Play.cmd, Play.sh or the developer launcher. Plain 'Play' if the resolver cannot be used."""
+    try:
+        import localization
+        return localization.entry(name) or 'Play'
+    except Exception:  # noqa: BLE001 - a name inside a message only
+        return 'Play'
+
+
+# Group A's wording; player_errors translates it through its {play} template.
+SERVICE_MISSING = 'The mod preparation service is not installed in this PCSX2. Close PCSX2, then start {play} again.'
+
+
+class RunningTime:
+    """Time a guest wait has spent while PCSX2 was running.
+
+    A paused emulator runs no guest frames, so a wall-clock deadline fails a
+    transaction that only waits for the player to resume PCSX2. The status is
+    read at most every `interval` seconds, and again before the budget can run
+    out; only an interval that starts and ends 'running' is charged. Any other
+    status (shutdown) ends the wait at once. A reader without a status counts
+    as running, exactly as before.
+    """
+    def __init__(self, p, seconds, clock=None, interval=.25):
+        clock=clock or (lambda:time.monotonic())
+        self.p,self.seconds,self.clock,self.interval=p,seconds,clock,interval
+        self.elapsed=0.0;self.paused=False;self.at=clock();self.status='running'
+
+    def _read(self):
+        status=getattr(self.p,'status',None)
+        status=status() if callable(status) else 'running'
+        return status if status in ('running','paused','shutdown') else 'running'
+
+    def expired(self):
+        now=self.clock()
+        if now-self.at<self.interval and not (self.status=='running' and self.elapsed+now-self.at>=self.seconds):
+            return False
+        status=self._read()
+        if self.status==status=='running':self.elapsed+=now-self.at
+        self.at,self.status=now,status
+        self.paused=self.paused or status=='paused'
+        return status!='running' and status!='paused' or self.elapsed>=self.seconds
+
+
 def quiet(p, timeout=10):
-    if not installed(p):raise ValueError('Restart Play (any teams) to install the native preparation service')
+    if not installed(p):raise ValueError(SERVICE_MISSING.format(play=launcher()))
     if p.read_u32(CONTROL)!=MAGIC:raise ValueError('Native preparation service is not armed')
     p.write_u32(CONTROL+24,p.read_u32(A(0x2FEB14)));p.write_u32(CONTROL+16,1)
-    deadline=time.monotonic()+timeout
-    while time.monotonic()<deadline:
+    # Only running time counts: a player who pauses PCSX2 here is waited for.
+    budget=RunningTime(p,timeout)
+    while True:
         if p.read_u32(CONTROL+20)==1:return
+        if budget.expired():break
         time.sleep(.02)
-    raise TimeoutError('The game did not acknowledge its preparation hold; resume the emulator')
+    raise TimeoutError(f'The game did not acknowledge its combat hold within {timeout} s of running time')
 
 
 def resume(p):
@@ -245,14 +380,16 @@ def apply(p,manifest,timeout=15):
     p.write(PACKET,packet)
     p.write(CONTROL+28,struct.pack('<3I',count,len(packet),0));p.write_u32(CONTROL+12,0)
     request=(req+1)&0xFFFFFFFF or 1;p.write_u32(CONTROL+4,request)
-    deadline=time.monotonic()+timeout
-    while time.monotonic()<deadline:
+    # The request is written once; a pause only extends the wait (running time).
+    budget=RunningTime(p,timeout)
+    while True:
         if p.read_u32(CONTROL+8)==request:
             status=p.read_u32(CONTROL+12)
-            if status!=1:raise RuntimeError(f'Native patch rejected: status{status}, block{p.read_u32(CONTROL+36)}')
+            if status!=1:raise RuntimeError(f'Native patch rejected: status {status}, block {p.read_u32(CONTROL+36)}')
             return
+        if budget.expired():break
         time.sleep(.02)
-    raise TimeoutError('Native preparation transaction was not acknowledged; match remains held')
+    raise TimeoutError(f'Native preparation transaction was not acknowledged within {timeout} s of running time; match remains held')
 
 
 def read_ram(p):

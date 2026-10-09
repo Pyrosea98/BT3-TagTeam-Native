@@ -52,10 +52,11 @@ def mode_bitmap(data):
     from guest_loading_screen import render, is_v4
     mode, humans = data.get('mode', 'teams'), data.get('humans', 1)
     teams, message, progress = data.get('teams', ()), data.get('message', 'GETTING YOUR FIGHTERS READY'), data.get('progress', 0)
-    key = (mode, humans, repr(teams), message)
+    error = tuple(data.get('error') or ()) or None   # the failure state: red text, no gauge (player_errors.cover_text)
+    key = (mode, humans, repr(teams), message, error)
     entry = _pictures.get(key)
     if entry is None or (not is_v4(entry[1]) and entry[2] != progress):   # the fallback picture bakes its bar
-        picture, layers, _ = render(teams, progress, message, mode=mode, humans=humans)
+        picture, layers, _ = render(teams, progress, message, mode=mode, humans=humans, **({'error': error} if error else {}))
         if len(_pictures) >= 4: _pictures.clear()
         _pictures[key] = entry = (picture, layers, progress)
     picture, layers, _ = entry
@@ -216,6 +217,14 @@ class NativeLoadingWindow:
                     text(base,top+cards['row_height']*(.37 if form else .5),max(11,round(17*scale)),
                          '#eef3fb',True,bounds,0)
                     if form:text(form,top+cards['row_height']*.69,max(9,round(12*scale)),'#b5c3d9',False,bounds,0)
+        error = self.data.get('error')
+        if error:
+            # The failure state looks like an error, never like loading: red title and lines, no bar, no hint.
+            text(self.data.get('title', 'Match setup stopped'), layout['title_y'], layout['title_pixels'], '#ff6b6b', True)
+            text(str(error[0]), layout['message_y'], layout['message_pixels'], '#ff8a80')
+            if len(error) > 1:
+                text(str(error[1]), layout['bar_y'], layout['hint_pixels'], '#f4b4ae')
+            return
         text(self.data.get('title', 'Preparing your team match'), layout['title_y'],
              layout['title_pixels'], '#ffffff', True)
         text(self.data.get('message', 'Getting your fighters ready...'), layout['message_y'],
@@ -231,7 +240,8 @@ class NativeLoadingWindow:
         # The helper owns this bitmap only. No emulator surface, memory or
         # transport field is touched; nearest scaling preserves the glyphs.
         key = (self.data.get('mode'), self.data.get('humans'),
-               repr(self.data.get('teams')), self.data.get('progress'), self.data.get('message'))
+               repr(self.data.get('teams')), self.data.get('progress'), self.data.get('message'),
+               repr(self.data.get('error')))
         if getattr(self, 'mode_picture_key', None) != key:
             self.mode_picture_bytes = mode_bitmap(self.data)
             self.mode_picture_key = key
@@ -246,7 +256,10 @@ class NativeLoadingWindow:
     def portrait(self,dc,path,x,y,size):
         if not path:return False
         path=Path(path)
-        root=Path(__file__).resolve().parents[1]/'assets/portraits'
+        # The chosen game disc's portraits (character_names.assets_folder): the installed disc's assets, or the
+        # folder of the disc chosen in Mod settings > Game disc.
+        from character_names import assets_folder
+        root=assets_folder()/'portraits'
         if path.suffix.lower()!='.bmp' or path.parent.resolve()!=root.resolve():return False
         key=str(path)
         if key not in self.bitmaps:

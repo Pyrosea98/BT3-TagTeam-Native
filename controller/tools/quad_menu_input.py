@@ -95,7 +95,8 @@ def route_payload():
 
 class Mailbox(transport.Mailbox):
     TOKEN_ADDRESS=TOKEN
-    READS={CONTROL:16}
+    CONTROL,MAILBOX=CONTROL,MAILBOX
+    READS={CONTROL:16,CONTROL+16:8}
     WRITES={MAILBOX:64,CONTROL+16:4,CONTROL+28:4}
     @classmethod
     def identity(cls,p):
@@ -126,8 +127,10 @@ class Bridge(pads.Bridge):
         self.sequence=(self.sequence+1)&0xFFFFFFFF or 1
         p.write_u32(CONTROL+16,self.sequence);p.write_u32(CONTROL+28,0);return True
 
+    def sink(self,mailbox,capture):
+        import controller_hub
+        return controller_hub.SelectorSink(mailbox,capture,mode=self.seats)
 
-class Owner(transport.Owner):
     def attach(self,p,capture,*,rewound=False):
         if pads.native_seat_pads():
             scene=p.read_u32(mode_menu.SCENE_MANAGER)
@@ -139,8 +142,9 @@ class Owner(transport.Owner):
             return
         if self.service is not None:
             if self.service.failure:raise RuntimeError(self.service.failure)
-            if self.capture==capture and self.attached_devices==self.devices and not rewound and self.service.active:return
+            if self.capture==capture and not rewound and self.service.active:
+                if self.attached_seats!=self.seats:
+                    self.hub.configure(self.service,mode=self.seats);self.attached_seats=self.seats
+                return
         self.close()
-        if not self.available(p,capture):return # Reported once; P3/P4 stay neutral off Windows.
-        self.service=transport.Service(Mailbox.attach(p,self.pid),devices=self.devices,bridge_factory=Bridge)
-        self.capture=capture;self.attached_devices=self.devices
+        self.add(p,capture) # Unavailable input is reported once; P3/P4 stay neutral off Windows.

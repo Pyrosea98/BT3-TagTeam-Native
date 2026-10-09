@@ -3,7 +3,7 @@
 Physical pairs0<->3 and1<->2 share target selection, melee geometry and
 projectile model selection. Source pointers retain identity during AI aliases.
 """
-from native_map import A, CRC, PAL, SERIAL, elf_path
+from native_map import A, CRC, SERIAL, TRANSLATED, elf_path
 import argparse
 import json
 import struct
@@ -191,7 +191,7 @@ def projectile_code():
 
 
 def build(ram_path, output):
-    if PAL:
+    if TRANSLATED:
         raise ValueError('The four-actor research target upgrade reads the USA-only September research patch')
     ram = Path(ram_path).read_bytes()
     assert len(ram) == 0x2000000

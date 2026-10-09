@@ -5,7 +5,7 @@ by actor flags125/126; normal impact timers, menu/loading pause, special
 admission, authored cameras and paired animation handlers remain native.
 Offline builders only; no PINE access.
 """
-from native_map import A, CRC, SERIAL, elf_path
+from native_map import A, CRC, FLAG_BITS, SERIAL, elf_path
 import argparse
 import json
 import struct
@@ -94,9 +94,10 @@ def prepare_code(*, legacy=False):
     a.branch(5, 18, 17, 'validate')
     a.move(18, 0); a.li(21, core.POINTERS)
     a.label('owners'); a.lw(23, 21)
-    # Native1DAC78 flag125/126 = OR of these two flag-bank bytes, bits5/6.
-    a.i(36, 8, 23, 0x10A9); a.i(36, 9, 23, 0x10D1); a.r(0x25, 8, 8, 9)
-    a.i(12, 8, 8, 0x60); a.branch(4, 8, 0, 'next_owner')
+    # Native1DAC78 flag125/126 = OR of these two flag-bank bytes, bits5/6 (USA; native_map.FLAG_BITS).
+    index, mask = FLAG_BITS((0x125, 0x126))
+    a.i(36, 8, 23, 0x1085 + index); a.i(36, 9, 23, 0x10AD + index); a.r(0x25, 8, 8, 9)
+    a.i(12, 8, 8, mask); a.branch(4, 8, 0, 'next_owner')
     a.lw(24, 23, 2376); a.addiu(8, 24, -253); a.i(11, 8, 8, 63)
     a.branch(4, 8, 0, 'done')  # transform/KO/non-special priority retains native global pause
     add_bit(a, 18, 19); add_bit(a, 18, 20)
@@ -274,6 +275,8 @@ def beam_chain_dependencies(ram, manager, count):
     callsites={p for sites in beam.CALLS.values() for p in sites}
     pieces=[(p,data+native(p+4,4) if p in callsites else data) for p,data in beam.pieces(native)]
     pieces=list((dict(pieces)|dict(dash_pieces)|dict(multi_pieces)).items())
+    import beam_struggle
+    pieces=beam_struggle.with_overlay(actual_ram,pieces)
     for p,data in pieces:
         if actual_ram[p:p+len(data)] != data:raise ValueError(f'Required beam binding code changed:{p:08X}')
     return pieces

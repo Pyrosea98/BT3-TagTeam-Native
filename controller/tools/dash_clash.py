@@ -4,7 +4,7 @@ Installed immediately after the guarded beam_clash stage. Both native coordinato
 share manager+64, so one dash OR beam struggle may own it at a time. Native
 strength/input, animations and winner flags remain untouched.
 """
-from native_map import A, CRC, SERIAL, elf_path
+from native_map import A, CRC, FLAG, SERIAL, elf_path
 import struct
 from types import SimpleNamespace
 from prototype import Assembler
@@ -74,10 +74,10 @@ def abort_code():
     a=Assembler(ABORT);beam.save(a);a.call(VALID);a.branch(4,2,0,'clear')
     a.li(16,CONTROL)
     for off in (64,68):
-        for flag in (0x61,0x62):
+        for flag in (FLAG(0x61),FLAG(0x62)):
             a.lw(4,16,off);a.addiu(5,0,flag);a.call(A(0x1DAA50))
         # Native end flags for250 and252. A pending251 falls back through252.
-        for flag in (0xBF,0xC6):
+        for flag in (FLAG(0xBF),FLAG(0xC6)):
             a.lw(4,16,off);a.addiu(5,0,flag);a.call(A(0x1DABE8))
     a.lw(8,16,4);a.lw(9,8,64);a.addiu(9,9,-6);a.i(11,9,9,6)
     a.branch(4,9,0,'clear');a.sw(0,8,64)

@@ -141,7 +141,7 @@ def hud_filter_code(legacy=False,deferred=True):
     return a.finish()
 
 
-def hud_draw_filter_code(deferred=True,quad_support=False,lockoff=False):
+def hud_draw_filter_code(deferred=True,quad_support=False,lockoff=False,prompt_state=True):
     """Filter render-only traversal; leave native callbacks/timers running."""
     import viewport_hud as view
     a=Assembler(HUD_DRAW_FILTER);view.save(a);core.gate(a,'native')
@@ -166,7 +166,23 @@ def hud_draw_filter_code(deferred=True,quad_support=False,lockoff=False):
     # Keep +4/+12/+16/+20/+24, including clash mash and intro prompts.
     a.lw(8,28,-22324);a.branch(4,8,0,'native')
     a.lw(9,8,0);a.branch(4,4,9,'panels' if deferred else 'hidden');a.lw(9,8,8);a.branch(4,4,9,'hidden')
-    a.label('native');view.restore(a)
+    a.label('native')
+    if prompt_state:
+        # Native 219710 establishes its GS baseline once, before custom split
+        # panels and world overlays can replace it. The interactive prompt is
+        # the +20 tree; its draw callbacks set textures/vertices but inherit
+        # scissors and sampling in both GS contexts. Restore the exact native
+        # baseline for that tree, including paths where split panels did not
+        # run this frame. Descendants and ordinary menu nodes remain unchanged.
+        a.li(8,hud_subject.CONTROL);a.lw(9,8,hud_subject.FIELDS['active'])
+        a.branch(4,9,0,'native_ready')
+        a.lw(8,28,-22324);a.branch(4,8,0,'native_ready')
+        a.lw(9,8,20);a.branch(5,4,9,'native_ready')
+        core.gate(a,'native_ready')
+        a.li(8,CONTROL);a.lw(9,8,FIELDS['manager']);a.lw(10,28,-22364)
+        a.branch(5,9,10,'native_ready');a.call(A(0x225790))
+        a.label('native_ready')
+    view.restore(a)
     for word in struct.unpack('<2I',HUD_DRAW_ORIGINAL):a.emit(word)
     a.jump(HUD_DRAW_ENTRY+8)
     if deferred:
@@ -261,6 +277,28 @@ def build_memory(ram,settings=None,source='<prepared>'):
     u=lambda p:struct.unpack_from('<I',ram,p)[0]
     options=settings_store.validate_settings({} if settings is None else settings)
     if options.get('hud_style')=='overhead_only':options[settings_store.NATIVE_HUD_KEY]=False
+    # Exact saved predecessors can be upgraded without accepting foreign code
+    # or resetting kill counters/display preferences. Dependency validators
+    # authenticate the rest against a temporary image containing the new
+    # filter, then the returned blocks still compare against the original RAM.
+    if u(CONTROL)==MAGIC and ram[HUD_DRAW_ENTRY:HUD_DRAW_ENTRY+8]==jump(HUD_DRAW_FILTER):
+        for deferred in (True,False):
+            for quad_support in (False,True):
+                for lockoff in (False,True):
+                    old=hud_draw_filter_code(deferred,quad_support,lockoff,prompt_state=False)
+                    if ram[HUD_DRAW_FILTER:HUD_DRAW_FILTER+len(old)]!=old:continue
+                    new=hud_draw_filter_code(deferred,quad_support,lockoff)
+                    if new==old:continue
+                    if any(ram[HUD_DRAW_FILTER+len(old):HUD_DRAW_FILTER+len(new)]):
+                        raise ValueError('Native prompt filter extension occupied')
+                    size=max(len(old),len(new));data=new+bytes(size-len(new))
+                    image=bytearray(ram);image[HUD_DRAW_FILTER:HUD_DRAW_FILTER+size]=data
+                    report=build_memory(image,settings,source)
+                    blocks={b['address']:b for b in report['blocks']}
+                    blocks[HUD_DRAW_FILTER]=dict(address=HUD_DRAW_FILTER,data_hex=data.hex())
+                    report['blocks']=[dict(b,expected_hex=ram[p:p+len(bytes.fromhex(b['data_hex']))].hex())
+                                      for p,b in sorted(blocks.items())]
+                    return report
     manager,count=u(core.ACTORS),u(core.MODE+4)
     if count not in modes.ACTOR_COUNTS or (u(core.MODE),u(core.MODE+8),u(core.MODE+12))!=(1,manager,count):
         raise ValueError('Display settings require the published captured match')
@@ -280,6 +318,12 @@ def build_memory(ram,settings=None,source='<prepared>'):
         pieces=[(p,four_player_mode.dependency_override(ram,p,d)) for p,d in pieces]
         import lockoff_target
         pieces=[(p,lockoff_target.dependency_override(ram,p,d)) for p,d in pieces]
+        # The target marker owns the overhead-bar call once installed (it draws the arrow, then the bars over it).
+        import lockon_select
+        patches=[(p,lockon_select.dependency_override(ram,p,d)) for p,d in patches]
+        # The attacker marks then own it (marks, then the arrow, then the bars).
+        import lockon_threat
+        patches=[(p,lockon_threat.dependency_override(ram,p,d)) for p,d in patches]
         previous=owned_pieces(ffa,legacy=True)+patches[:-1]+[(HUD_DRAW_ENTRY,HUD_DRAW_ORIGINAL)]
         prior_solo=[(p,four_player_mode.dependency_override(ram,p,d)) for p,d in owned_pieces(ffa,solo=False)]+patches
         upgrading=all(ram[p:p+len(d)]==d for p,d in previous)

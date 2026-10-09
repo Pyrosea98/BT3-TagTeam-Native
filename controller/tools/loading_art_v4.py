@@ -711,7 +711,25 @@ def orb_base(cv, cx, cy, r, T):
         fill(cv, [(cx+math.cos(a)*(r+6), cy+math.sin(a)*(r+6)), (cx+math.cos(a)*(r+9), cy+math.sin(a)*(r+9))], T[0], 0.6, width=1, closed=False)
 
 
+ERROR_RED, ERROR_PALE = (255, 86, 86), (255, 218, 218)
+
+
+def error_footer(cv, s, theme, rec):
+    """The failure state: a dark band with red rules and two red lines, no gauge (additive)."""
+    first, second = (list(s['error']) + ['', ''])[:2]
+    m, px, py = poly_mask([(0, 398), (640, 398), (640, 478), (0, 478)])
+    cv.over(px, py, solid(m, (14, 0, 6), 0.82))
+    for y in (398, 477):
+        m, px, py = poly_mask([(22, y), (618, y), (618, y+1), (22, y+1)])
+        cv.over(px, py, linear(m, px, py, 22, 0, 618, 0, [(0, ERROR_RED, 0), (0.5, ERROR_RED, 0.9), (1, ERROR_RED, 0)]))
+    text(cv, first, 320, 431, size=16, align='center', spacing=2, color=ERROR_RED, stroke=(24, 0, 0, 0.9), stroke_width=3,
+         max_w=600, min_size=10, min_spacing=0, record=rec)
+    text(cv, second, 320, 462, size=12, kind='semi', align='center', spacing=2, color=ERROR_PALE, stroke=(24, 0, 0, 0.7),
+         stroke_width=2, max_w=600, min_size=9, min_spacing=0, record=rec)
+
+
 def footer(cv, s, lay, theme, rec):
+    if s.get('error'): return error_footer(cv, s, theme, rec)
     G = GAUGE
     fw = measure(s['footer'], 14, 4)
     text(cv, s['footer'], 320, 411, size=14, align='center', spacing=4, color=(238, 244, 255), stroke=(0, 0, 20, 0.8), stroke_width=3, record=rec)
@@ -959,11 +977,16 @@ def lights_for(s, lay, mode, theme, table):
 
 
 # ---- compose ----------------------------------------------------------------------------------
-def compose(teams=(), progress=0, message='LOADING YOUR FIGHTERS', *, mode='teams', humans=1, portrait_colors=None, decorations=None):
-    """Pictures, entrance slices, the lights plan and text boxes for one screen."""
+def compose(teams=(), progress=0, message='LOADING YOUR FIGHTERS', *, mode='teams', humans=1, portrait_colors=None, decorations=None,
+            error=None):
+    """Pictures, entrance slices, the lights plan and text boxes for one screen.
+
+    error=(line 1, line 2) draws the failure state instead of the gauge: red text, translated first
+    and then fitted to the width (never cut), no gauge and no loading dots."""
     view = _design(teams, mode, humans)
     mode = view['mode']; theme = THEMES[mode]
     s = state_for(view, str(message).upper()[:60])
+    if error: s = dict(s, error=tuple(tr(str(line)).upper() for line in tuple(error)[:2]))
     lay = layout(s)
     rec = []
     cv = Canvas(DESIGN[0]*S, DESIGN[1]*S)
@@ -986,7 +1009,9 @@ def compose(teams=(), progress=0, message='LOADING YOUR FIGHTERS', *, mode='team
         c = it['card']
         cards.append(dict(x0=nx(it['x']), y0=ny(it['y']-3), x1=nx(it['x']+it['w']), y1=ny(it['y']+it['h']), name=c['base'], form=c['form'],
                           role=c['role'], side=it['side'], hex=(nx(it['hex']['cx']), ny(it['hex']['cy']))))
-    return dict(background=background(mode), foreground=fg, atlas_image=atlas_image, slices=slices, lights=lights_for(s, lay, mode, theme, table),
+    lights = lights_for(s, lay, mode, theme, table)
+    if error: lights = dict(lights, gauge=None, dots=None)   # a stopped setup shows no progress
+    return dict(background=background(mode), foreground=fg, atlas_image=atlas_image, slices=slices, lights=lights,
                 text=rec, cards=cards, atlas=table, mode=mode, humans=view['humans'], progress=max(0, min(100, int(progress))))
 
 

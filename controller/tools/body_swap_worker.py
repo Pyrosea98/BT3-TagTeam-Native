@@ -154,16 +154,18 @@ class Worker:
         direct_hook=struct.pack('<2I',(2<<26)|(runner.ENTRY>>2),0)
         # This optional outer wrapper has an independent full-code receipt.
         # Do not accept an arbitrary jump merely because its tail names us.
-        outer_view=lazy_ram.LazyRam(p) if p.read(runner.HOOK,8)!=direct_hook else None
+        outer_view=lazy_ram.LazyRam(p)
         for capacity in (policy.TEAM_CAPACITY,policy.LEGACY_TEAM_CAPACITY):
             try:
                 with policy.building_for(capacity),lazy_ram.patched():
-                    hook=runner.frame_hook(outer_view) if outer_view is not None else direct_hook
+                    import story_runtime
+                    hook=runner.frame_hook(outer_view)
                     expected=[(at,hook if at==runner.HOOK else data) for at,data in runner.program(previous)+capture.program()]
+                    expected=[(at,story_runtime.dependency_override(outer_view,at,data)) for at,data in expected]
             except ValueError:
                 continue
             if all(p.read(at,len(data))==data for at,data in expected):
-                self.capacity=capacity;matched=True;break
+                self.capacity=capacity;self.pieces=expected;matched=True;break
         if not matched:
             raise ValueError('Body Change program changed before attach')
         if p.read_u32(body.CONTROL+16)!=0:
@@ -179,6 +181,17 @@ class Worker:
         mask=live_owner_mask(p)
         self.apply(p,dict(blocks=[live_block(p,body.OWNERS,mask),live_block(p,body.CONTROL+20,1)]))
         self.active=True;return True
+
+    def installed(self,p):
+        """Is the service this worker attached to still this match's? Reads only (no claim,
+        no write): the watcher checks a worker it parked for a moment out of combat before it
+        reuses it (match F1). The words attach checked and the exact program bytes it verified;
+        a worker that found no service needs none to have appeared since."""
+        if not self.active:return p.read_u32(body.CONTROL)==0
+        manager=p.read_u32(body.CONTROL+4)
+        if (p.read_u32(body.CONTROL)!=body.MAGIC or p.read_u32(body.CONTROL+8) not in ACTOR_COUNTS or
+                p.read_u32(body.core.ACTORS)!=manager):return False
+        return all(p.read(at,len(data))==data for at,data in getattr(self,'pieces',()))
 
     def _abort(self,p,generation,reason):
         """Abandon a stuck claim as a stock no-op finish: status 2 -> 0.
@@ -246,8 +259,9 @@ class Worker:
         # on ACK and must never become cleanup ownership.
         self.owned[name]=manifest
         self.apply(p,dict(manifest,blocks=published))
-        deadline=self.clock()+90
-        while self.clock()<deadline:
+        # Running time only: a PCSX2 paused during the job is waited for.
+        budget=native.RunningTime(p,90,clock=self.clock)
+        while True:
             if p.read_u32(runner.CONTROL+8)==generation:
                 status=p.read_u32(runner.CONTROL+12)
                 if status!=5 or p.read_u32(control+4)!=5:
@@ -255,8 +269,9 @@ class Worker:
                 timing_name='resident_copy' if manifest.get('resident_copy') else name
                 self.timings[timing_name]=self.timings.get(timing_name,0)+time.perf_counter()-started
                 return
+            if budget.expired():break
             self.sleep(.02)
-        raise TimeoutError(f'Body Change {name} did not finish; match remains held')
+        raise TimeoutError(f'Body Change {name} did not finish within 90 s of running time; match remains held')
 
     def _clear(self,p,ram,names,lo,hi,extra_blocks=()):
         view=bytearray(ram[lo:hi])
@@ -347,7 +362,7 @@ class Worker:
             # a host that kept polling could retry under a foreign hold.
             try:self._watch_stuck(p)
             except Exception as exc:
-                self.failure=str(exc);self.progress(self.failure);raise
+                import player_errors;self.failure=player_errors.short(exc);self.progress(self.failure);raise
             return False
         if state!=3:return False
         if reload_worker is not None and getattr(reload_worker,'form_job',None) is not None:return False
@@ -423,7 +438,7 @@ class Worker:
             self.progress('Body Change handoff actions: '+str(self.completed['handoff_actions']))
             self.progress('Bodies exchanged');self.resume(p);return True
         except Exception as exc:
-            self.failure=str(exc);self.progress(self.failure);raise
+            import player_errors;self.failure=player_errors.short(exc);self.progress(self.failure);raise
         finally:
             if self._ram_buffer is not None:self._ram_buffer.invalidate()
             self._ram_buffer=None

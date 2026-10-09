@@ -47,6 +47,8 @@ def restore_views(a,snap):
     The ordinary lifecycle tick is suspended during retirement/audio upload.
     Waiting for that tick leaves both seats on the vanished fusion meanwhile.
     Only this pair is changed; an unrelated concurrent fusion keeps its views.
+    Return v0=1 after publishing authenticated multiplayer seats, so the
+    legacy co-op fallback cannot overwrite an arbitrary human-seat order.
     """
     import multiplayer_fusion as multi
     import quad_viewports as views
@@ -69,8 +71,8 @@ def restore_views(a,snap):
         for field in ('held','watching'):
             a.li(8,seats.CONTROL+seats.F[field]+4*seat);a.sw(0,8)
         a.label(f'view_next{seat}')
-    a.li(8,row);a.sw(0,8,multi.F['status'])
-    a.label('views_done')
+    a.li(8,row);a.sw(0,8,multi.F['status']);a.addiu(2,0,1);a.jump('views_return')
+    a.label('views_done');a.move(2,0);a.label('views_return')
 
 
 def health_split(remaining,leader,partner):
@@ -258,11 +260,13 @@ def code(snap,cfg,partner):
     for pword in (timer.part.CONSUMED,timer.part.CONTROL+20):
         a.li(8,pword);a.lw(9,8);a.li(10,0xFFFFFFFF^(1<<p['physical']));a.r(0x24,9,9,10);a.sw(9,8)
     restore_views(a,snap)
+    a.sw(2,29,0x80)
     a.li(8,timer.policy.CONTROL);a.lw(9,8);a.li(10,timer.policy.MAGIC);a.branch(5,9,10,'publish')
     a.lw(9,8,24);a.addiu(10,0,snap['side']);a.branch(5,9,10,'publish')
     a.addiu(9,0,-1);a.sw(9,8,24);a.sw(9,8,28);a.sw(0,8,64)
     # Co-op's shared view publishes the leader into both successor seats.
     # Restore the actual two human seats before the next camera/HUD pass.
+    a.lw(9,29,0x80);a.branch(5,9,0,'publish')
     a.lw(9,8,12);a.addiu(10,0,timer.policy.COOP);a.branch(5,9,10,'publish')
     for side,physical in ((0,snap['side']),(1,p['physical'])):
         a.li(8,camera.SUCCESSOR_CONTROL+8+4*side);a.addiu(9,0,physical);a.sw(9,8)

@@ -50,7 +50,10 @@ MENU_DETAILS = (
     ('LEFT  TWO HUMANS + OPTIONAL CPUS.', 'RIGHT  UP TO FIVE CPUS. FIRST TWO LEFT PICKS ARE HUMAN.'),
     ('EVERY FIGHTER IS A CPU. YOU WATCH.', 'SWITCH WHO YOU FOLLOW WITH THE TARGET BUTTON.'),
     ('RETURN TO THE ORIGINAL GAME MENUS.', 'SIMULTANEOUS TEAM BATTLES STAY AVAILABLE.'))
-MENU_HINT = 'D-PAD CHOOSE   X CONFIRM   TRIANGLE ORIGINAL MENU'
+# The fallback mode list takes the disc's own accept / back buttons (mode_menu: regional.RAW_ACCEPT / RAW_BACK).
+from native_map import JPN as _JAPANESE_MENUS
+MENU_HINT = ('D-PAD CHOOSE   O CONFIRM   X ORIGINAL MENU' if _JAPANESE_MENUS else
+             'D-PAD CHOOSE   X CONFIRM   TRIANGLE ORIGINAL MENU')
 
 # Glyphs the shared kill-feed font lacks; drawn here as plain rectangles only.
 SUPPLEMENT = {

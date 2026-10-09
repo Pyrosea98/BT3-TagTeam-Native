@@ -26,6 +26,12 @@ CONTROL, ROWS, END = 0x0745E000, 0x0745E100, 0x07460000
 STRIDE, HOOK = 0x80, start.HOOK
 ERRORS = {101: 'Captured identity changed', 102: 'Actors must remain idle and held',
           103: 'Native leader floor unavailable', 104: 'No nearby walkable spawn floor'}
+# A fighter left its standing idle pose (native action 11) before the formation could be placed (P-1). The
+# player's next step is a fresh match: this watcher stays stopped, so PCSX2 and Play start again (Spanish in
+# localization.ES; {play} is this installation's launcher).
+NOT_IDLE = ('One of the fighters was still moving when the extra fighters were placed, so this match could not be '
+            'set up. '
+            'Close PCSX2, start {play} again, then choose the teams again in character selection.')
 SAVED = tuple(range(2, 26)) + (31,)
 
 
@@ -170,7 +176,8 @@ def legacy_build_memory(ram, source='<offline-memory>'):
         model=u(core.MODELS+4*model_id)
         if not 0x100000<=model<len(ram)-0x1670 or u(model+4)!=1:raise ValueError('Invalid registered model')
         if u(actor+0x948)!=11 or any(u(actor+off) for off in (0x1278,0x127C,0x1280,0x1284)):
-            raise ValueError('All actors must be held in native idle11')
+            from native_preparation import launcher
+            raise ValueError(NOT_IDLE.format(play=launcher()))
         if any(u(model+off) not in (model+3936,model+3968) for off in (4000,4004)):
             raise ValueError('Invalid native collision sphere buffers')
         for off in (0,4,8):

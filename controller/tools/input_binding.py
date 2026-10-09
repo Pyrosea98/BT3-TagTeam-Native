@@ -4,10 +4,9 @@ The saved binding is a logical PS2 button, so each player keeps their own
 emulator controller mapping. No INI, gamepad, emulator or memory is written.
 
 SDL2 comes from the bundled SDL2.dll on Windows and from the system's
-libSDL2-2.0.so.0 (SDL2 or sdl2-compat) elsewhere. Linux pads report no XInput
-slot, so SDL-N there follows device enumeration order, as it does in PCSX2;
-the watcher logs the list it sees, and Player Setup's Assign controllers lets
-each player claim a pad by pressing Cross / A on it.
+libSDL2-2.0.so.0 (SDL2 or sdl2-compat) elsewhere. This module serves the rebind
+dialog of Mod settings. Players' controllers during play are read by the
+controller hub (controller_hub.py), which logs every controller it sees.
 """
 import configparser
 from localization import tr
@@ -100,19 +99,6 @@ def sdl_status():
     return 'SDL2 available'
 
 
-class JoystickGUID(ctypes.Structure):
-    _fields_ = [('data', ctypes.c_uint8*16)]
-
-
-def device_report(rows):
-    """The watcher-log line naming every pad SDL sees: its SDL device index and the SDL-N slot read from it."""
-    parts = [f"device {row['index']} " + (f"= SDL-{row['slot']}" if row['slot'] is not None else '(not opened)')
-             + f" '{row['name']}' GUID {row['guid'] or 'unknown'}" for row in rows]
-    return (f'Three/four-player input: SDL sees {len(rows)} controller(s). Here SDL-N follows device order '
-            '(Controller N+1 in Player Setup > Assign controllers); unless controllers are assigned there, '
-            'players 3 and 4 read SDL-2 and SDL-3' + (': ' + ', '.join(parts) if parts else '') + '.')
-
-
 def grab_dialog(dialog, attempts=40, delay=25):
     """grab_set(), retried while X11 has not mapped a new dialog yet ("window not viewable").
 
@@ -141,7 +127,7 @@ def keyboard_sources(keysym):
 
 class ControllerCapture:
     """Read SDL2's standardized pad controls; devices are released on close."""
-    def __init__(self,dll=None,*,background=False,report=None):
+    def __init__(self,dll=None,*,background=False):
         self.dll=load_sdl(dll)
         self.controllers=[];self.initialized=False;self.background=background;self._instances={}
         signatures={
@@ -172,27 +158,6 @@ class ControllerCapture:
         try:
             self.previous=self.pressed()
         except Exception:self.close();raise
-        if background and not WINDOWS:
-            # Linux numbers pads by enumeration, not XInput slot: record what this helper sees.
-            report=report or print  # looked up now, so tests can silence it
-            try:report(device_report(self.describe()))
-            except Exception as error:report(f'Three/four-player input: SDL controller list unavailable ({error}).')
-
-    def describe(self):
-        """[{index, slot (the SDL-N read here, or None), name, guid}] for every joystick SDL lists."""
-        name_of=getattr(self.dll,'SDL_JoystickNameForIndex',None)
-        guid_of=getattr(self.dll,'SDL_JoystickGetDeviceGUID',None)
-        if name_of is not None:name_of.argtypes=[ctypes.c_int];name_of.restype=ctypes.c_char_p
-        if guid_of is not None:guid_of.argtypes=[ctypes.c_int];guid_of.restype=JoystickGUID
-        slots={instance:slot for instance,(slot,_) in self._instances.items()}
-        rows=[]
-        for index in range(max(0,self.dll.SDL_NumJoysticks())):
-            name=name_of(index) if name_of is not None else None
-            guid=guid_of(index) if guid_of is not None else None
-            rows.append(dict(index=index,slot=slots.get(self.dll.SDL_JoystickGetDeviceInstanceID(index)),
-                             name=(name or b'').decode('utf-8','replace') or 'unknown',
-                             guid=bytes(guid.data).hex() if guid is not None else ''))
-        return rows
 
     def update(self):
         """Poll and reopen hotplugged pads without renumbering attached seats."""

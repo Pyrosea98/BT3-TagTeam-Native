@@ -2,6 +2,9 @@
 
 Reads AFS1 entry450, its second byte-pair compressed package, then native
 package entries29/30/31. No network assets or generated character art.
+The European disc's English set is file 455. The Japanese disc's set (file 450)
+names fighters in kanji/kana only: its portraits come from the disc and its
+English names from bt3_english_names.json (regional.english_names).
 """
 import argparse
 import hashlib
@@ -100,8 +103,9 @@ def extract(iso_path, destination=ROOT/'assets'):
     import pycdlib
     from PIL import Image
     import regional
-    if regional.PAL:
-        # The European English text set: file 455 (USA 451, AFS1 index 450), read by the disc's own numbering.
+    if regional.DISC_REGION!='US':
+        # The European English text set: file 455 (USA 451, AFS1 index 450), read by the disc's own numbering; the
+        # Japanese text set: file 450.
         raw=regional.read_disc_file(iso_path,451)
     else:
         iso=pycdlib.PyCdlib();iso.open(str(iso_path))
@@ -116,8 +120,9 @@ def extract(iso_path, destination=ROOT/'assets'):
     names,forms,portraits=package(ui[29]),package(ui[30]),package(ui[31])
     if (len(names),len(forms),len(portraits))!=(168,168,165):raise ValueError('Unexpected English UI tables')
     entries=[];decoded=[]
+    english=regional.english_names() if regional.TEXT_LANGUAGE!='en' else None
     for index in range(161):
-        base,form=english_label(names[index]),english_label(forms[index])
+        base,form=english[index] if english else (english_label(names[index]),english_label(forms[index]))
         if not base:raise ValueError(f'Empty character name{index}')
         name=base+(f' - {form}' if form else '')
         entries.append(dict(character_id=index,name=name,base_name=base,form=form,
@@ -131,6 +136,8 @@ def extract(iso_path, destination=ROOT/'assets'):
         background=Image.new('RGB',(64,64),(17,24,39));background.paste(image,mask=image.getchannel('A'))
         background.save(destination/row['bitmap'])
     manifest=dict(source=('User-owned SLES-54945 ISO / DATA/PZS3EU1.AFS / file 455 / package1' if regional.PAL else
+                          'User-owned SLPS-25815 ISO / DATA/PZS3JP1.AFS / file 450 / package1 portraits; English names '
+                          + regional.ENGLISH_NAMES if regional.DISC_REGION=='JP' else
                           'User-owned SLUS-21678 ISO / DATA/PZS3US1.AFS / index450 / package1'),
         source_sha256=hashlib.sha256(raw).hexdigest(),native_entries=dict(names=29,forms=30,portraits=31),characters=entries)
     (destination/'characters.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')

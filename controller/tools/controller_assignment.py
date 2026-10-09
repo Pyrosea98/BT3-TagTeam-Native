@@ -1,33 +1,23 @@
-"""Session-only physical controller assignment for all modded player seats.
+"""P1/P2 input from the controller check-in, for modded matches only.
 
-Opt-in: native PCSX2 bindings remain untouched when no assignment is active.
-P1/P2 receive the same standardized pad layout already used by P3/P4. The
-authenticated mailbox has no executable writes and expires to neutral input.
+Opt-in per seat: PCSX2's own bindings remain untouched while the hook is disarmed, and a seat whose PASS bit is
+set keeps PCSX2's record of that port (a controller PCSX2 already uses as that player, a keyboard, the default
+order). Mod-read seats receive the same standardized pad layout already used by P3/P4. The authenticated mailbox
+has no executable writes and expires to neutral input. The controller hub's thread is the only writer of the
+mailbox, the PASS mask, the armed word and the private words while a sink is attached (controller_hub.AssignmentSink).
 """
 import struct
-import threading
-from collections import deque
 from prototype import Assembler
-from input_binding import ControllerCapture, SDL_BUTTONS
 import controller_mailbox as transport
 import quad_controller as pads
 import mode_menu
 
 CODE, CONTROL, MAILBOX, TOKEN = 0x06930000, 0x06933000, 0x06933100, 0x06933080
 END, MAGIC = 0x06934000, 0x43415331
-
-
-def order(value):
-    value=tuple(value)
-    if len(value) not in (2,3,4) or len(set(value))!=len(value) or any(type(i)is not int or not 0<=i<32 for i in value):
-        raise ValueError('Choose a different connected controller for each player')
-    return value
-
-
-def private_devices(value):
-    """Unused seats receive a disconnected index, never somebody else's pad."""
-    selected=tuple(value[2:])
-    return selected+tuple(range(32,34-len(selected)))
+# CONTROL: +0 magic, +12 armed, +16 host sequence, +20 consumed sequence, +24 stale count, +28 writer flag,
+# +0x30 PASS (bit0 seat 1, bit1 seat 2: a set bit leaves PCSX2's record untouched), +0x40+12k private previous,
+# menu and repeat words, +0x80 TOKEN, +0x100 MAILBOX, +0x180 published state.
+PASS = 0x30
 
 
 def payload():
@@ -55,6 +45,8 @@ def payload():
         for field in range(5):a.sw(0,8,0x180+seat*32+field*4)
     a.label('publish')
     for seat in range(2):
+        # A pass-through seat keeps PCSX2's own record untouched (its port's pad, keyboard or default order).
+        a.lw(9,8,PASS);a.i(12,9,9,1<<seat);a.branch(5,9,0,f'next{seat}')
         # Use a private previous state; the native poll's previous word belongs
         # to PCSX2's original device, which may be another assigned player.
         a.li(12,mode_menu.PAD+seat*0x1C0);a.lw(10,8,0x180+seat*32)
@@ -85,12 +77,15 @@ def code_pieces():return [(CODE,payload())]
 
 class Mailbox(transport.Mailbox):
     TOKEN_ADDRESS=TOKEN
-    READS={CONTROL:16}
-    WRITES={MAILBOX:64,CONTROL+16:4,CONTROL+28:4}
+    CONTROL,MAILBOX=CONTROL,MAILBOX
+    # PCSX2's own port records are read (never written) for press matching: status, state and the raw read.
+    READS={CONTROL:16,CONTROL+16:8,mode_menu.PAD+0x104:24,mode_menu.PAD+0x1C0+0x104:24}
+    # Private previous/menu/repeat words: one seat at a time (seat 1 at +0x40, seat 2 at +0x4C).
+    WRITES={MAILBOX:64,CONTROL+16:4,CONTROL+28:4,CONTROL+12:4,CONTROL+PASS:4,CONTROL+0x40:12,CONTROL+0x4C:12}
 
     @classmethod
     def identity(cls,p):
-        if p.read(CODE,len(payload()))!=payload():raise ValueError('Controller assignment hook is not installed; restart Play')
+        if p.read(CODE,len(payload()))!=payload():raise ValueError('The controller assignment service is not installed in this PCSX2. Close PCSX2, then start Play again')
         return {CONTROL:p.read(CONTROL,16),CODE:p.read(CODE,16)}
 
 
@@ -112,94 +107,42 @@ class Bridge(pads.Bridge):
 
 
 class Owner:
-    def __init__(self,pid):self.pid=pid;self.order=None;self.service=None;self.capture=None
+    """The P1/P2 override's sink in the controller hub. No thread starts or ends here.
 
-    def assign(self,devices):
-        self.close();self.order=order(devices) if devices is not None else None
+    attach(p, capture): ('menu',) or ('battle', match capture). allow_arm is the watcher's `custom` rule (a modded
+    match or Modded Modes page, never native modes, never online); the hub arms from the check-in roster."""
+    def __init__(self,pid,hub=None):self.pid=pid;self.hub=hub;self.service=None;self.capture=None
 
-    def attach(self,p,capture):
+    def attach(self,p,capture,*,allow_arm=True,in_match=None,rewound=False):
         if pads.native_seat_pads():
             self.disable(p) # PadConfig owns P1/P2 directly; no physical SDL remapping.
             return
         if self.order is None:return
+        in_match=bool(capture and capture[0]=='battle') if in_match is None else in_match
         if self.service is not None:
             if self.service.failure:raise RuntimeError(self.service.failure)
-            if self.capture==capture and self.service.active:return
+            if self.capture==capture and self.service.active and not rewound:
+                if (self.service.allow_arm,self.service.in_match)!=(allow_arm,in_match):
+                    self.hub.configure(self.service,allow_arm=allow_arm,in_match=in_match)
+                return
         self.close()
-        # Disarm before staging data; arm only after the input thread is ready.
+        if self.hub is None:raise RuntimeError('The controller reader is not running')
+        if self.hub.state=='failed':raise transport.MailboxUnavailable(self.hub.failure or 'SDL controller input is unavailable')
+        self.hub.start()
+        # Disarm before staging data; the hub thread arms (PASS, private words, one packet, then armed).
         p.write_u32(CONTROL+12,0)
         p.write(CONTROL,struct.pack('<8I',MAGIC,0,0,0,0,0,pads.LEASE,0)+bytes(0x1E0))
-        try:
-            self.service=transport.Service(Mailbox.attach(p,self.pid),devices=self.order[:2],bridge_factory=Bridge)
-            p.write_u32(CONTROL+12,1);self.capture=capture
-        except BaseException:self.close();raise
+        import controller_hub
+        mailbox=Mailbox.attach(p,self.pid)
+        self.service=self.hub.add_sink(controller_hub.AssignmentSink(mailbox,capture,allow_arm=allow_arm,in_match=in_match))
+        self.capture=capture
 
     def disable(self,p):
+        """No sink: the watcher disarms through PINE (only while no assignment sink exists)."""
         self.close();p.write_u32(CONTROL+12,0)
 
     def close(self):
-        if self.service is not None:self.service.close()
-        self.service=None;self.capture=None
-
-
-class CapturePump:
-    """Keep short press/release transitions between the watcher's menu ticks."""
-    def __init__(self):
-        self.lock=threading.Lock();self.stop=threading.Event();self.ready=threading.Event()
-        self.events=deque(maxlen=128);self.current=set();self.controllers=[];self.error=None
-        self.thread=threading.Thread(target=self._run,name='Controller assignment capture',daemon=True)
-        self.thread.start()
-        if not self.ready.wait(5):self.close();raise OSError('Controller capture timed out')
-        if self.error:self.close();raise OSError(self.error)
-
-    def _run(self):
-        capture=None
         try:
-            capture=ControllerCapture(background=True);previous=None
-            while not self.stop.is_set():
-                current=capture.pressed()
-                with self.lock:
-                    self.controllers=list(capture.controllers);self.current=current
-                    if current!=previous:self.events.append(current.copy())
-                previous=current;self.ready.set();self.stop.wait(.01)
-        except Exception as error:self.error=str(error)
+            if self.service is not None:self.service.close()
         finally:
-            if capture is not None:capture.close()
-            self.ready.set()
-
-    def pressed(self):
-        if self.error:raise OSError(self.error)
-        with self.lock:return self.events.popleft() if self.events else self.current.copy()
-
-    def update(self):pass
-
-    def close(self):
-        self.stop.set();self.thread.join(timeout=5)
-        if self.thread.is_alive():raise RuntimeError('Controller capture did not stop')
-
-
-class Wizard:
-    """Fresh Cross/A presses, one unclaimed controller per human seat."""
-    def __init__(self,humans,capture=None):
-        self.humans=humans;self.capture=capture or ControllerCapture(background=True)
-        self.devices=[];self.ready=False;self.message='Release all controller buttons.'
-
-    def poll(self):
-        pressed=self.capture.pressed()
-        self.capture.update();connected={i for i,_ in self.capture.controllers}
-        if any(i not in connected for i in self.devices):
-            self.devices=[];self.ready=False;self.message='A controller disconnected. Start again with Player 1.';return None
-        if not self.ready:
-            if not pressed:self.ready=True;self.message='Press Cross / A on this player\u2019s controller.'
-            return None
-        candidates={int(s.split('/')[0][4:]) for s in pressed if s.endswith('/FaceSouth')}
-        if not candidates:return None
-        self.ready=False
-        if len(candidates)>1:self.message='One controller at a time. Release and try again.';return None
-        device=next(iter(candidates))
-        if device in self.devices:self.message='That controller already belongs to another player.';return None
-        self.devices.append(device);self.message='Release all controller buttons.'
-        if len(self.devices)==self.humans:return order(self.devices)
-        return None
-
-    def close(self):self.capture.close()
+            self.service=None;self.capture=None

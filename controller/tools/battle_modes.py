@@ -236,6 +236,8 @@ def validate_memory(ram,manager=None,count=None):
         expected=new+old[len(new):]
         import lockoff_target
         expected=lockoff_target.dependency_override(ram,p,expected)
+        import lockon_threat
+        expected=lockon_threat.dependency_override(ram,p,expected)
         import viewport_hud
         expected=viewport_hud.dependency_override(ram,p,expected)
         import teammate_revive

@@ -64,7 +64,7 @@ def build(source):
     if any(r[CODE:CONTROL+128]):raise ValueError('Fresh memory reservation occupied')
     _,_,native=elf_reader(elf_path(ROOT))
     for p,n in ((HOOK,8),(A(0x254E30),0x38),(A(0x2554D8),0x30),(A(0x255508),0x68)):
-        if r[p:p+n]!=native(p,n):raise ValueError(f'Changed native helper{p:08X}')
+        if r[p:p+n]!=native(p,n):raise ValueError(f'Changed native helper {p:08X}')
     original=native(HOOK,8)
     for word in struct.unpack('<2I',original):
         if word>>26 in(1,2,3,4,5,6,7,20,21):raise ValueError('Native prologue requires branch relocation')

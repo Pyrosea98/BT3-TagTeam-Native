@@ -66,7 +66,8 @@ def configuration(ram,character,costume):
     # The actual form still needs its own hidden staging model and texture.
     require(len(occupied)<=10 and u(pool+69128)>=2,'Cell requires auxiliary and form model capacity')
     require(u(pool+397320)>=row['draw_nodes'],'Insufficient auxiliary draw capacity')
-    require((u(pool+439156)&0x7FFF).bit_count()<=13,'Cell requires auxiliary and form texture capacity')
+    # The same rule as the preflight, which admitted this job under the same hold.
+    require(auxiliary.texture_room(ram),'Cell requires auxiliary and form texture capacity')
     require(any(not u(w['registry']+i*56+48)&1 for i in range(12)),
             'Cell requires a free record for the actual form')
     require(not any(ram[ENTRY:END]),'Auxiliary staging workspace must be restored before reuse')

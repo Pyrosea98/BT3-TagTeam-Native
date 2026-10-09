@@ -7,7 +7,7 @@ is not consent). A request expires without spending or starting fusion, and a
 body that is busy when consent arrives keeps the request pending rather than
 destroying it.
 """
-from native_map import A, CRC, SERIAL
+from native_map import A, CRC, FLAG, SERIAL
 import struct
 import localization
 from prototype import Assembler
@@ -116,6 +116,9 @@ def tick(previous):
         a.lw(8,17,off);a.addiu(8,8,-241);a.i(11,8,8,2);a.branch(5,8,0,'done')
     a.jump('cancel')
     a.label('pending')
+    # A changed option cancels unanswered offers without disturbing the
+    # accepted queue/active ownership handled above.
+    a.li(9,fusion.DISABLED);a.lw(9,9);a.branch(5,9,0,'cancel')
     a.lw(9,16,60);a.r(0x23,9,9,8);a.branch(6,9,0,'cancel')
     a.li(8,participation.CONSUMED);a.lw(8,8);a.i(12,8,8,4);a.branch(5,8,0,'cancel')
     a.li(8,core.POINTERS);a.lw(17,8);a.lw(18,8,8)
@@ -147,7 +150,7 @@ def tick(previous):
         for off in (2380,2388,2392,2396,2400):
             a.lw(8,r,off);a.addiu(9,0,-1);a.branch(5,8,9,'done')
         for bank in (0x1085,0x10AD):
-            a.i(36,8,r,bank+(0x94>>3));a.i(12,8,8,1<<(0x94&7));a.branch(5,8,0,'done')
+            a.i(36,8,r,bank+(FLAG(0x94)>>3));a.i(12,8,8,1<<(FLAG(0x94)&7));a.branch(5,8,0,'done')
         for off in (3480,3500,3512):a.lw(8,r,off);a.branch(5,8,0,'done')
     # Revalidate ordinary native fusion eligibility when consent actually arrives.
     a.move(4,17);a.lw(5,16,VARIANT);a.addiu(6,0,1);a.move(7,0)

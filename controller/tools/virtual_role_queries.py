@@ -4,7 +4,7 @@ Each argument comes directly from an AI context's virtual-role word. The
 existing alias-scoped E8 bridges translate that role to the actor's model ID.
 Global204EA0/2062F0 implementations and all non-AI callsites remain untouched.
 """
-from native_map import A, CRC, SERIAL
+from native_map import A, CRC, JPN, SERIAL
 import argparse
 import json
 import struct
@@ -14,13 +14,14 @@ from distinct_ai import HEIGHT_BRIDGE, RADIUS_BRIDGE, role_bridge
 
 ROOT = Path(__file__).resolve().parents[1]
 # call, native helper, bridge, address of proven lw a0,0(context), base register,
-# containing native AI-context routine
+# containing native AI-context routine. The Japanese 1BB9A8 keeps the context in s1, not s2 (jpn_reviewed.json).
+S_1BB9A8 = 17 if JPN else 18
 SPECS = (
     (A(0x1B424C), A(0x204EA0), HEIGHT_BRIDGE, A(0x1B4248), 16, A(0x1B4220)),
     (A(0x1B9400), A(0x204EA0), HEIGHT_BRIDGE, A(0x1B9404), 17, A(0x1B93D8)),
-    (A(0x1BBB10), A(0x204EA0), HEIGHT_BRIDGE, A(0x1BBB14), 18, A(0x1BB9A8)),
+    (A(0x1BBB10), A(0x204EA0), HEIGHT_BRIDGE, A(0x1BBB14), S_1BB9A8, A(0x1BB9A8)),
     (A(0x1B94F0), A(0x2062F0), RADIUS_BRIDGE, A(0x1B94EC), 17, A(0x1B93D8)),
-    (A(0x1BBBDC), A(0x2062F0), RADIUS_BRIDGE, A(0x1BBBE0), 18, A(0x1BB9A8)),
+    (A(0x1BBBDC), A(0x2062F0), RADIUS_BRIDGE, A(0x1BBBE0), S_1BB9A8, A(0x1BB9A8)),
     (A(0x1BC1A4), A(0x2062F0), RADIUS_BRIDGE, A(0x1BC1A0), 18, A(0x1BC0B8)),
     (A(0x1BC1B8), A(0x2062F0), RADIUS_BRIDGE, A(0x1BC1BC), 18, A(0x1BC0B8)),
     (A(0x1BCB00), A(0x2062F0), RADIUS_BRIDGE, A(0x1BCAFC), 18, A(0x1BCAA8)),

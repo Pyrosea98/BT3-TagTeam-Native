@@ -4,7 +4,7 @@ Ordinary attacks enumerate actual enemy geometry. Lock-on remains independent;
 the resolver override exists only while evaluating one actual contact. Authored
 paired moves retain their selected recipient and all existing cinematic guards.
 """
-from native_map import A, CRC, SERIAL, elf_path
+from native_map import A, CRC, FLAG, SERIAL, elf_path
 import struct
 from prototype import Assembler, ROOT, elf_reader
 import fresh_team_combat as core
@@ -98,7 +98,7 @@ def single_code():
             a.addiu(9,8,-first);a.i(11,9,9,length);a.branch(5,9,0,'yes')
     contact.paired_pending(a,4,'yes')
     for bank in (0x1085,0x10AD):
-        for flag in (0x47,0x48,0x49):
+        for flag in (FLAG(0x47),FLAG(0x48),FLAG(0x49)):
             a.i(36,8,4,bank+(flag>>3));a.i(12,8,8,1<<(flag&7));a.branch(5,8,0,'yes')
     a.move(2,0);a.jr();a.label('yes');a.addiu(2,0,1);a.jr()
     data=a.finish();assert len(data)<=RESOLVE-SINGLE;return data
@@ -153,7 +153,7 @@ def gather_code():
     a.move(4,16);a.call(SINGLE);a.branch(5,2,0,'single')
     # The original 1C8F18 has already updated attack segment CAD/F44. Its
     # native latch clear resets every victim's reservation at the same boundary.
-    a.move(4,16);a.addiu(5,0,0x60);a.call(A(0x1DAC78))
+    a.move(4,16);a.addiu(5,0,FLAG(0x60));a.call(A(0x1DAC78))
     a.branch(5,2,0,'latched');a.sw(0,22)
     a.label('latched');a.lw(8,16,0xF48);a.sw(8,29,80)
     a.move(4,16);a.call(dash.RESOLVE);a.sw(3,29,84)
@@ -166,10 +166,10 @@ def gather_code():
     # Native flag65 permits the selected-target follow-through even without a
     # fresh geometry bit. Preserve that authored exception for that target.
     a.lw(8,29,84);a.branch(5,8,18,'next')
-    a.move(4,16);a.addiu(5,0,0x65);a.call(A(0x1DAC78));a.branch(4,2,0,'next')
+    a.move(4,16);a.addiu(5,0,FLAG(0x65));a.call(A(0x1DAC78));a.branch(4,2,0,'next')
     a.label('contact')
     a.addiu(20,0,1);a.r(4,20,18,20);a.lw(8,22);a.r(0x24,8,8,20)
-    a.move(4,16);a.addiu(5,0,0x60);a.branch(4,8,0,'unhit')
+    a.move(4,16);a.addiu(5,0,FLAG(0x60));a.branch(4,8,0,'unhit')
     a.call(A(0x1DA9D0));a.jump('evaluate');a.label('unhit');a.call(A(0x1DAA50))
     a.label('evaluate');a.lw(8,29,80);a.sw(8,16,0xF48)
     a.addiu(8,0,-1);a.sw(8,16,0xF40);context(a,16,19)
@@ -177,14 +177,14 @@ def gather_code():
     a.lw(8,16,0xF40);a.branch(5,8,18,'latch')
     a.lw(8,21);a.r(0x25,8,8,20);a.sw(8,21)
     a.lw(8,29,84);a.branch(5,8,18,'latch');a.sw(18,29,88)
-    a.label('latch');a.move(4,16);a.addiu(5,0,0x60);a.call(A(0x1DAC78))
+    a.label('latch');a.move(4,16);a.addiu(5,0,FLAG(0x60));a.call(A(0x1DAC78))
     a.branch(4,2,0,'next');a.lw(8,22);a.r(0x25,8,8,20);a.sw(8,22)
     a.label('next');a.addiu(18,18,1);a.branch(5,18,23,'victim')
     a.lw(8,29,88);a.sw(8,16,0xF40)
     # F48 is a source animation counter, not a count of enemy geometry tests.
-    a.lw(8,29,80);a.sw(8,16,0xF48);a.move(4,16);a.addiu(5,0,0x65);a.call(A(0x1DAC78))
+    a.lw(8,29,80);a.sw(8,16,0xF48);a.move(4,16);a.addiu(5,0,FLAG(0x65));a.call(A(0x1DAC78))
     a.branch(4,2,0,'aggregate');a.lw(8,16,0xF48);a.addiu(8,8,1);a.sw(8,16,0xF48)
-    a.label('aggregate');a.move(4,16);a.addiu(5,0,0x60);a.lw(8,22)
+    a.label('aggregate');a.move(4,16);a.addiu(5,0,FLAG(0x60));a.lw(8,22)
     a.branch(4,8,0,'clear');a.call(A(0x1DA9D0));a.jump('done')
     a.label('clear');a.call(A(0x1DAA50));a.jump('done')
     a.label('single');a.addiu(8,0,-1);a.sw(8,21)

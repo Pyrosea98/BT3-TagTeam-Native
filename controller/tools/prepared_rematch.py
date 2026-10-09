@@ -22,11 +22,11 @@ from battle_mode_policy import ACTOR_COUNTS
 
 
 def plan(ram, *, show_loading=True):
-    if len(ram)!=0x8000000:raise ValueError('Rematch requires complete128MiB EE RAM')
+    if len(ram)!=0x8000000:raise ValueError('Rematch requires complete 128 MiB EE RAM')
     u=lambda p:struct.unpack_from('<I',ram,p)[0]
     # Older manual-mode checkpoints already start themselves. They do not have
     # the native transaction service needed for a race-free entropy update.
-    transport=all(ram[p:p+len(data)]==data for p,data in native.code_pieces())
+    transport=native.captured_transport(ram)
     selected=battle_modes.validate_memory(ram)
     if not transport:
         if selected=='ffa':raise ValueError('FFA rematches require the current native preparation service')
@@ -52,7 +52,7 @@ def plan(ram, *, show_loading=True):
         raise ValueError('Rematch intro capture changed')
     if u(native.CONTROL) not in (0,native.MAGIC) or u(native.CONTROL+4)!=u(native.CONTROL+8):
         raise ValueError('Rematch transport has a pending or unknown transaction')
-    pieces=[]
+    pieces=native.upgrade_blocks(ram)
     def word(p,value):
         data=struct.pack('<I',value)
         pieces.append(dict(address=p,expected_hex=ram[p:p+4].hex(),data_hex=data.hex()))

@@ -17,8 +17,15 @@ binds a summoned effect model instead of a fighter paused player two without
 ever framing the move. The living performer of the running native cinematic
 is accepted as that shared subject, and any frame that still stops uninvolved
 fighters presents one view instead of restoring the two ordinary viewports.
+
+The shared stop never holds a fighter the running presentation itself needs:
+one the authored camera binds (a victim at +768/+772), nor the live rush
+partner of a member or of such a fighter. Holding them froze the reaction that
+ends the move, so the presentation renewed itself until the hold bound (the
+30 s rush stall). A latch is never taken, nor kept, onto a camera that is
+showing another pair's live rush.
 """
-from native_map import A, CRC, PAL, SERIAL, elf_path
+from native_map import A, CRC, FLAG_BITS, SERIAL, TRANSLATED, elf_path
 import struct
 from prototype import Assembler, ROOT, elf_reader
 import mod_settings as settings
@@ -40,7 +47,12 @@ OLD_PREPARE, OLD_STORE = 0x07118000,0x0711A000
 CLONES, PRIORITY, CONTROL, END = (0x0711B000,0x0711B400),0x0711C000,0x0711F000,0x07120000
 SHARED_FORM = 0x0711C800
 # Native flag 0xD3 lives in bank byte 26 bit 3 (sub_1DABE8 sets bank B, sub_1DAC78 ORs both).
-PRIORITY_FLAG_BYTES, PRIORITY_FLAG_BIT = (4255,4295), 8
+# Native actor flag 211 (0xD3) in both flag banks (+0x1085 current, +0x10AD requested): USA bytes 4255/4295, bit 8.
+_PRIORITY_INDEX, PRIORITY_FLAG_BIT = FLAG_BITS((0xD3,))
+PRIORITY_FLAG_BYTES = (0x1085+_PRIORITY_INDEX, 0x10AD+_PRIORITY_INDEX)
+# Native actor flags 293/294 (0x125/0x126, the presentation of an activated ultimate): USA byte 0x24, bits 5/6.
+ULTIMATE_FLAG_INDEX, ULTIMATE_FLAG_MASK = FLAG_BITS((0x125, 0x126))
+ULTIMATE_FLAG_BYTES = (0x1085+ULTIMATE_FLAG_INDEX, 0x10AD+ULTIMATE_FLAG_INDEX)
 LAST_PRIORITY, PRIORITY_VIEWS = 40, 44
 # Set for the frame when uninvolved fighters are stopped for an authored
 # ultimate: the checked category forced the whole stop, or the native global
@@ -95,6 +107,14 @@ HOLD_IDLE, HOLD_TOTAL = 108, 112
 # 900 matches LATCH_UPDATES: the longest presentation the authored cameras are expected to
 # run (a thrown Spirit Bomb is the long case). HOLD_MATCH is three of those.
 HOLD_UPDATES, HOLD_RELEASE, HOLD_FORGET, HOLD_MATCH = ticks(900), ticks(120), ticks(30), ticks(2700)
+# Participant protection (beta.37). PROTECT answers the fighters a hold must leave running: the ones the
+# running authored camera binds at +768/+772, plus the live reciprocal rush partner (+3732/+3736, still in
+# 301..303/313..315 or about to be) of a member or of such a fighter. FOREIGN answers whether the running
+# camera shows another pair's live rush, which no latch may take or keep. Telemetry only, guest-written:
+# PROTECT_LAST is the last protected mask, PROTECT_UPDATES the updates that protected anyone, LATCH_REFUSED
+# the latches refused or dropped for a foreign camera.
+PROTECT, FOREIGN, PENDING = 0x0711A400, 0x0711A800, 0x0711AC00
+PROTECT_LAST, PROTECT_UPDATES, LATCH_REFUSED = 116, 120, 124
 # Native return addresses with their proven actor register and displacement.
 SCRIPT_ACTORS = {
     (16,0):(A(0x1C1E2C),A(0x1D64CC),A(0x200AB4)),
@@ -194,7 +214,7 @@ def classify():
     return a.finish()
 
 
-def prepare(shared_stop=True):
+def prepare(shared_stop=True,participants=False):
     import special_camera_arbitration as arbitration
     bail='bail' if shared_stop else 'done'
     a=Assembler(PREPARE);save(a)
@@ -214,9 +234,15 @@ def prepare(shared_stop=True):
         a.lw(9,8,LATCH_AGE);a.li(11,LATCH_UPDATES);a.r(0x2B,9,9,11);a.branch(4,9,0,'latch_drop')
         a.lw(17,28,-22180);a.lw(9,8,LATCH_CAMERA);a.branch(5,9,17,'latch_drop')
         camera_running(a,17,'latch_drop','latch')
+        if participants:
+            # The one cinematic camera record now shows another pair's live rush: that is not
+            # this owner's presentation, whatever the record's address says.
+            a.addiu(4,16,-1);a.call(FOREIGN);a.branch(5,2,0,'latch_foreign')
         a.addiu(4,16,-1);a.call(continuity.LOOKUP);a.branch(4,3,0,'latch_drop')
         a.li(8,CONTROL);a.lw(9,8,LATCH_AGE);a.addiu(9,9,1);a.sw(9,8,LATCH_AGE)
         a.jump('latch_done')
+        if participants:
+            a.label('latch_foreign');a.li(8,CONTROL);a.lw(9,8,LATCH_REFUSED);a.addiu(9,9,1);a.sw(9,8,LATCH_REFUSED)
         a.label('latch_drop');a.li(8,CONTROL);a.sw(0,8,LATCH_OWNER);a.sw(0,8,LATCH_MEMBERS)
         a.sw(0,8,LATCH_AGE);a.sw(0,8,LATCH_CAMERA)
         a.label('latch_done');a.li(8,CONTROL)
@@ -234,7 +260,7 @@ def prepare(shared_stop=True):
     a.lw(8,22,12);a.i(11,9,8,12);a.branch(4,9,0,bail)
     a.r(0,9,0,8,2);a.li(11,core.MODELS);a.r(0x2D,9,9,11);a.lw(9,9)
     a.branch(4,9,0,bail);a.lw(9,9,16);a.branch(5,8,9,bail)
-    a.i(36,8,22,0x10A9);a.i(36,9,22,0x10D1);a.r(0x25,8,8,9);a.i(12,8,8,0x60)
+    a.i(36,8,22,ULTIMATE_FLAG_BYTES[0]);a.i(36,9,22,ULTIMATE_FLAG_BYTES[1]);a.r(0x25,8,8,9);a.i(12,8,8,ULTIMATE_FLAG_MASK)
     a.branch(4,8,0,'next')
     a.addiu(23,0,1);a.r(4,23,17,23);a.r(0x25,18,18,23);a.r(0x25,20,20,23)
     a.lw(4,22,2376);a.call(CLASSIFY);a.addiu(8,0,3);a.branch(4,2,8,bail)
@@ -278,7 +304,7 @@ def prepare(shared_stop=True):
         a.label('bail_scan')
         a.r(0,8,0,17,2);a.li(9,core.POINTERS);a.r(0x2D,8,8,9);a.lw(18,8)
         arbitration.pointer(a,18,0x1600,'bail_next')
-        a.i(36,8,18,0x10A9);a.i(36,9,18,0x10D1);a.r(0x25,8,8,9);a.i(12,8,8,0x60)
+        a.i(36,8,18,ULTIMATE_FLAG_BYTES[0]);a.i(36,9,18,ULTIMATE_FLAG_BYTES[1]);a.r(0x25,8,8,9);a.i(12,8,8,ULTIMATE_FLAG_MASK)
         a.branch(4,8,0,'bail_next')
         a.li(8,CONTROL);a.addiu(9,0,3);a.sw(9,8,SHARED_STOP);a.jump('done')
         a.label('bail_next');a.addiu(17,17,1);a.branch(5,17,16,'bail_scan')
@@ -715,8 +741,8 @@ def shared_form_owner(script_stop_fix=True):
     a.branch(4,19,0,'next')
     a.i(36,8,19,PRIORITY_FLAG_BYTES[0]);a.i(36,9,19,PRIORITY_FLAG_BYTES[1]);a.r(0x25,8,8,9)
     a.i(12,8,8,PRIORITY_FLAG_BIT)
-    a.i(36,9,19,0x10A9);a.i(36,11,19,0x10D1);a.r(0x25,9,9,11)
-    a.i(12,9,9,0x60);a.r(0x25,8,8,9)
+    a.i(36,9,19,ULTIMATE_FLAG_BYTES[0]);a.i(36,11,19,ULTIMATE_FLAG_BYTES[1]);a.r(0x25,9,9,11)
+    a.i(12,9,9,ULTIMATE_FLAG_MASK);a.r(0x25,8,8,9)
     a.branch(4,8,0,'next')
     a.lw(4,19,2376);a.call(CLASSIFY);a.addiu(8,0,2);a.branch(5,2,8,'next')
     a.move(4,18);a.call(continuity.LOOKUP);a.branch(4,3,0,'next')
@@ -731,7 +757,8 @@ def shared_form_owner(script_stop_fix=True):
     data=a.finish();assert len(data)<CONTROL-SHARED_FORM;return data
 
 
-def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,script_stop_fix=True,*,all_activations=True):
+def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,script_stop_fix=True,*,all_activations=True,
+                   participants=False):
     """v0=live ultimate actor, v1=local1/director2; publishes exact members.
 
     No action-only latch: camera priority or authenticated native ownership
@@ -766,8 +793,8 @@ def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,
     a.i(36,8,19,PRIORITY_FLAG_BYTES[0]);a.i(36,9,19,PRIORITY_FLAG_BYTES[1]);a.r(0x25,8,8,9)
     a.i(12,8,8,PRIORITY_FLAG_BIT)
     if activation_cameras and native_cameras:
-        a.i(36,9,19,0x10A9);a.i(36,11,19,0x10D1);a.r(0x25,9,9,11)
-        a.i(12,9,9,0x60);a.r(0x25,8,8,9)
+        a.i(36,9,19,ULTIMATE_FLAG_BYTES[0]);a.i(36,11,19,ULTIMATE_FLAG_BYTES[1]);a.r(0x25,9,9,11)
+        a.i(12,9,9,ULTIMATE_FLAG_MASK);a.r(0x25,8,8,9)
     a.branch(4,8,0,'local_next')
     a.lw(4,19,2376);a.call(CLASSIFY);a.addiu(8,0,1);a.branch(5,2,8,'local_next')
     a.move(4,18);a.call(continuity.LOOKUP);a.branch(4,3,0,'local_next')
@@ -841,8 +868,8 @@ def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,
     a.i(36,8,24,PRIORITY_FLAG_BYTES[0]);a.i(36,9,24,PRIORITY_FLAG_BYTES[1]);a.r(0x25,8,8,9)
     a.i(12,8,8,PRIORITY_FLAG_BIT)
     if activation_cameras and native_cameras:
-        a.i(36,9,24,0x10A9);a.i(36,11,24,0x10D1);a.r(0x25,9,9,11)
-        a.i(12,9,9,0x60);a.r(0x25,8,8,9)
+        a.i(36,9,24,ULTIMATE_FLAG_BYTES[0]);a.i(36,11,24,ULTIMATE_FLAG_BYTES[1]);a.r(0x25,9,9,11)
+        a.i(12,9,9,ULTIMATE_FLAG_MASK);a.r(0x25,8,8,9)
     a.branch(4,8,0,'casting_next')
     a.lw(4,24,2376);a.call(CLASSIFY)
     if shared_stop and all_activations:
@@ -866,10 +893,23 @@ def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,
     if shared_stop:a.lw(9,29,224);a.r(0x25,21,21,9)
     a.li(8,CONTROL);a.sw(20,8,ULTIMATE_KIND);a.sw(21,8,ULTIMATE_MEMBERS)
     if shared_stop:
+        if participants:
+            # An actor-local proof says nothing about which presentation the one camera record is
+            # running. While it shows another pair's live rush, this update's ownership stands, but
+            # no latch may outlive the owner's own proof (s1c: a latch on the rush camera held the
+            # rush pair until the 900-update bound).
+            a.addiu(9,0,1);a.branch(5,20,9,'latch')
+            a.move(4,18);a.call(FOREIGN);a.branch(4,2,0,'latch')
+            a.li(8,CONTROL);a.lw(9,8,LATCH_OWNER);a.addiu(11,18,1);a.branch(5,9,11,'latch_refused')
+            a.sw(0,8,LATCH_OWNER);a.sw(0,8,LATCH_MEMBERS);a.sw(0,8,LATCH_AGE);a.sw(0,8,LATCH_CAMERA)
+            a.label('latch_refused');a.lw(9,8,LATCH_REFUSED);a.addiu(9,9,1);a.sw(9,8,LATCH_REFUSED)
+            a.jump('published')
+            a.label('latch');a.li(8,CONTROL)
         # Latch this proven presentation so the rest of its authored camera
         # survives the moment every actor-side proof of it expires.
         a.addiu(9,18,1);a.sw(9,8,LATCH_OWNER);a.sw(21,8,LATCH_MEMBERS)
         a.sw(0,8,LATCH_AGE);a.lw(9,28,-22180);a.sw(9,8,LATCH_CAMERA)
+        if participants:a.label('published')
     a.move(2,19);a.move(3,20);a.jump('return')
     if shared_stop:
         # Nothing proves an owner now. The same camera record may still be
@@ -881,6 +921,12 @@ def ultimate_owner(native_cameras=True,activation_cameras=True,shared_stop=True,
         a.addiu(18,18,-1)
         a.lw(17,28,-22180);a.lw(8,16,LATCH_CAMERA);a.branch(5,8,17,'no')
         camera_running(a,17,'no','latched')
+        if participants:
+            # Another pair's live rush on the camera: drop the latch so it cannot revive.
+            a.move(4,18);a.call(FOREIGN);a.branch(4,2,0,'latched_own')
+            a.li(8,CONTROL);a.sw(0,8,LATCH_OWNER);a.sw(0,8,LATCH_MEMBERS);a.sw(0,8,LATCH_AGE);a.sw(0,8,LATCH_CAMERA)
+            a.lw(9,8,LATCH_REFUSED);a.addiu(9,9,1);a.sw(9,8,LATCH_REFUSED);a.jump('no')
+            a.label('latched_own')
         a.li(8,core.POINTERS);a.r(0,9,0,18,2);a.r(0x2D,8,8,9);a.lw(19,8)
         a.branch(4,19,0,'no')
         a.move(4,18);a.call(continuity.LOOKUP);a.branch(4,3,0,'no')
@@ -940,7 +986,7 @@ def native_camera_owner():
     data=a.finish();assert len(data)<ULTIMATE_STOP-NATIVE_CAMERA_OWNER;return data
 
 
-def ultimate_stop(shared_stop=True,rush_support=True):
+def ultimate_stop(shared_stop=True,rush_support=True,participants=False):
     """Maintain checked cinematic pause after native activation flags expire.
 
     Bounded: see HOLD_AGE. A presentation that never ends releases everyone after
@@ -981,7 +1027,11 @@ def ultimate_stop(shared_stop=True,rush_support=True):
     a.li(11,HOLD_FORGET);a.r(0x2B,11,9,11);a.branch(5,11,0,'done')
     a.sw(0,8,HOLD_BLOCK);a.jump('done')
     a.label('hold_apply')
-    a.li(8,CONTROL);a.lw(16,8,8);a.lw(17,8,ULTIMATE_MEMBERS);a.move(18,0)
+    # participants: the fighters the presentation itself needs are never held (PROTECT).
+    if participants:a.call(PROTECT)
+    a.li(8,CONTROL);a.lw(16,8,8);a.lw(17,8,ULTIMATE_MEMBERS)
+    if participants:a.r(0x25,17,17,2)
+    a.move(18,0)
     a.label('actor');a.addiu(8,0,1);a.r(4,8,18,8);a.r(0x24,8,8,17);a.branch(5,8,0,'next')
     a.li(8,core.POINTERS);a.r(0,9,0,18,2);a.r(0x2D,8,8,9);a.lw(8,8)
     # Do not shorten native impact timers, alter pending timers, or interfere
@@ -990,6 +1040,100 @@ def ultimate_stop(shared_stop=True,rush_support=True):
     a.label('next');a.addiu(18,18,1);a.branch(5,18,16,'actor')
     a.label('done');restore(a);a.jr()
     data=a.finish();assert len(data)<ULTIMATE_FRAME-ULTIMATE_STOP;return data
+
+
+def protect():
+    """v0 = fighters the running presentation needs that are not members; never holds anyone itself.
+
+    P1: every registered fighter whose model the running authored camera binds at +768/+772 (the
+    victim of an actor-local ultimate is a nonmember, and holding it froze the reaction that ends the
+    move). P2: the reciprocal partner of a member or P1 fighter, while that partner is live in the
+    native paired families (cinematic_contact_guard.paired_pending): stale pair fields alone never
+    exempt anyone. Telemetry: PROTECT_LAST/PROTECT_UPDATES.
+    """
+    import special_camera_arbitration as arbitration
+    a=Assembler(PROTECT);save(a)
+    a.li(8,CONTROL);a.lw(16,8,8);a.lw(17,8,ULTIMATE_MEMBERS);a.move(18,0)
+    # s0 count, s1 members, s2 protected mask, s3 camera, s4 index, s5 actor, s6/s7 pair, t8 partner, t9 its actor
+    a.lw(19,28,-22180);camera_running(a,19,'pairs','protect_camera')
+    a.move(20,0)
+    a.label('bound_scan')
+    a.li(8,core.POINTERS);a.r(0,9,0,20,2);a.r(0x2D,8,8,9);a.lw(21,8)
+    arbitration.pointer(a,21,0x1600,'bound_next')
+    a.lw(8,21,12);a.i(11,9,8,12);a.branch(4,9,0,'bound_next')
+    a.r(0,9,0,8,2);a.li(8,core.MODELS);a.r(0x2D,8,8,9);a.lw(8,8);a.branch(4,8,0,'bound_next')
+    a.lw(9,19,768);a.branch(4,8,9,'bound_yes');a.lw(9,19,772);a.branch(5,8,9,'bound_next')
+    a.label('bound_yes');a.addiu(9,0,1);a.r(4,9,20,9);a.r(0x25,18,18,9)
+    a.label('bound_next');a.addiu(20,20,1);a.branch(5,20,16,'bound_scan')
+    a.label('pairs');a.move(20,0)
+    a.label('pair_scan')
+    a.r(0x25,8,17,18);a.addiu(9,0,1);a.r(4,9,20,9);a.r(0x24,8,8,9);a.branch(4,8,0,'pair_next')
+    a.li(8,core.POINTERS);a.r(0,9,0,20,2);a.r(0x2D,8,8,9);a.lw(21,8)
+    arbitration.pointer(a,21,0x1600,'pair_next')
+    a.lw(22,21,3732);a.lw(23,21,3736)
+    a.r(0x2B,8,22,16);a.branch(4,8,0,'pair_next');a.r(0x2B,8,23,16);a.branch(4,8,0,'pair_next')
+    a.branch(4,22,23,'pair_next')
+    a.move(24,23);a.branch(4,22,20,'pair_partner')
+    a.move(24,22);a.branch(5,23,20,'pair_next')
+    a.label('pair_partner')
+    a.li(8,core.POINTERS);a.r(0,9,0,24,2);a.r(0x2D,8,8,9);a.lw(25,8)
+    arbitration.pointer(a,25,0x1600,'pair_next')
+    a.lw(8,25,3732);a.branch(5,8,22,'pair_next');a.lw(8,25,3736);a.branch(5,8,23,'pair_next')
+    a.move(4,25);a.call(PENDING);a.branch(4,2,0,'pair_next')
+    a.addiu(9,0,1);a.r(4,9,24,9);a.r(0x25,18,18,9)
+    a.label('pair_next');a.addiu(20,20,1);a.branch(5,20,16,'pair_scan')
+    # v0 = P & ~members, without nor.
+    a.r(0x24,2,18,17);a.r(0x26,2,2,18);a.branch(4,2,0,'done')
+    a.li(8,CONTROL);a.sw(2,8,PROTECT_LAST);a.lw(9,8,PROTECT_UPDATES);a.addiu(9,9,1);a.sw(9,8,PROTECT_UPDATES)
+    a.label('done');restore(a,skip=(2,));a.jr()
+    data=a.finish();assert len(data)<FOREIGN-PROTECT;return data
+
+
+def foreign():
+    """a0 = owner index -> v0 = 1 while the running authored camera shows another pair's live rush.
+
+    The camera binds (+768/+772) a registered fighter X other than the owner whose reciprocal pair
+    (+3732/+3736) is valid, agrees from both sides, does not contain the owner, and is live
+    (paired_pending of X or of its partner). The owner's own rush pair is never foreign.
+    """
+    import special_camera_arbitration as arbitration
+    a=Assembler(FOREIGN);save(a);a.move(16,4)
+    a.li(8,CONTROL);a.lw(17,8,8)
+    a.lw(19,28,-22180);camera_running(a,19,'no','foreign_camera')
+    a.move(20,0)
+    a.label('scan');a.branch(4,20,16,'next')
+    a.li(8,core.POINTERS);a.r(0,9,0,20,2);a.r(0x2D,8,8,9);a.lw(21,8)
+    arbitration.pointer(a,21,0x1600,'next')
+    a.lw(8,21,12);a.i(11,9,8,12);a.branch(4,9,0,'next')
+    a.r(0,9,0,8,2);a.li(8,core.MODELS);a.r(0x2D,8,8,9);a.lw(8,8);a.branch(4,8,0,'next')
+    a.lw(9,19,768);a.branch(4,8,9,'bound');a.lw(9,19,772);a.branch(5,8,9,'next')
+    a.label('bound');a.lw(22,21,3732);a.lw(23,21,3736)
+    a.r(0x2B,8,22,17);a.branch(4,8,0,'next');a.r(0x2B,8,23,17);a.branch(4,8,0,'next')
+    a.branch(4,22,23,'next');a.branch(4,22,16,'next');a.branch(4,23,16,'next')
+    a.move(24,23);a.branch(4,22,20,'partner')
+    a.move(24,22);a.branch(5,23,20,'next')
+    a.label('partner')
+    a.li(8,core.POINTERS);a.r(0,9,0,24,2);a.r(0x2D,8,8,9);a.lw(25,8)
+    arbitration.pointer(a,25,0x1600,'next')
+    a.lw(8,25,3732);a.branch(5,8,22,'next');a.lw(8,25,3736);a.branch(5,8,23,'next')
+    a.move(4,21);a.call(PENDING);a.branch(5,2,0,'yes')
+    a.move(4,25);a.call(PENDING);a.branch(5,2,0,'yes')
+    a.label('next');a.addiu(20,20,1);a.branch(5,20,17,'scan')
+    a.label('no');a.move(2,0);a.jump('return')
+    a.label('yes');a.addiu(2,0,1)
+    a.label('return');restore(a,skip=(2,));a.jr()
+    data=a.finish();assert len(data)<PENDING-FOREIGN;return data
+
+
+def pending():
+    """a0 = actor -> v0 = 1 while it is live in a native paired family (cinematic_contact_guard.paired_pending:
+    301..303/313..315 current or requested, or the rush-contact flag pair). Leaf; clobbers t0/t1 only."""
+    import cinematic_contact_guard as contact
+    a=Assembler(PENDING)
+    contact.paired_pending(a,4,'yes')
+    a.move(2,0);a.jr()
+    a.label('yes');a.addiu(2,0,1);a.jr()
+    data=a.finish();assert len(data)<CLONES[0]-PENDING;return data
 
 
 def ultimate_frame(script_stop_fix=True):
@@ -1100,12 +1244,17 @@ def result_bridge(base,native,kind):
     data=a.finish();assert len(data)<0x400;return data
 
 
-def program(enhanced=True,*,complete_ultimates=True,native_cameras=True,activation_cameras=True,shared_stop=True,script_stop_fix=True,rush_support=True):
+def program(enhanced=True,*,complete_ultimates=True,native_cameras=True,activation_cameras=True,shared_stop=True,script_stop_fix=True,rush_support=True,
+            participants=False):
+    """participants=False is exactly the beta.36 emission (old receipts and installs); build_memory always
+    asks for participants=True, which adds PROTECT/FOREIGN and their call sites."""
     old_prep=fresh.rebound(pause.prepare_code,PREPARE=OLD_PREPARE)(legacy=False)
     old_store=fresh.rebound(pause.store_code,STORE=OLD_STORE)(legacy=False)
+    assert OLD_STORE+len(old_store)<=PROTECT
     activation_cameras=activation_cameras and native_cameras and complete_ultimates
     shared_stop=shared_stop and activation_cameras
-    parts=[(CODE,selector(complete_ultimates,activation_cameras,shared_stop,rush_support=rush_support)),(PREPARE,prepare(shared_stop)),(STORE,store()),(CLASSIFY,classify()),
+    participants=participants and complete_ultimates
+    parts=[(CODE,selector(complete_ultimates,activation_cameras,shared_stop,rush_support=rush_support)),(PREPARE,prepare(shared_stop,participants and shared_stop)),(STORE,store()),(CLASSIFY,classify()),
             (VIEW,view(enhanced)),(BIND,bind(complete_ultimates,shared_stop,rush_support)),(SUBJECT,subject(enhanced)),(PRIORITY,priority(enhanced,complete_ultimates,shared_stop,rush_support)),
             (RESULT_ACTOR,result_bridge(RESULT_ACTOR,A(0x1DC178),'actor')),
             (RESULT_MODEL,result_bridge(RESULT_MODEL,A(0x12B1D0),'model')),
@@ -1113,11 +1262,14 @@ def program(enhanced=True,*,complete_ultimates=True,native_cameras=True,activati
             (RESULT_WINNER,result_winner()),
             (OLD_PREPARE,old_prep),(OLD_STORE,old_store)] + ([(COOP_FUSION,coop_fusion())] if enhanced else [])
     if complete_ultimates:
-        parts += [(ULTIMATE_OWNER,ultimate_owner(native_cameras,activation_cameras,shared_stop,script_stop_fix)),
-                  (ULTIMATE_STOP,ultimate_stop(shared_stop,rush_support)),(ULTIMATE_FRAME,ultimate_frame(script_stop_fix))]
+        parts += [(ULTIMATE_OWNER,ultimate_owner(native_cameras,activation_cameras,shared_stop,script_stop_fix,
+                                                 participants=participants)),
+                  (ULTIMATE_STOP,ultimate_stop(shared_stop,rush_support,participants)),(ULTIMATE_FRAME,ultimate_frame(script_stop_fix))]
         if native_cameras:parts.append((NATIVE_CAMERA_OWNER,native_camera_owner()))
         if shared_stop:parts.append((SHARED_FORM,shared_form_owner(script_stop_fix)))
         if script_stop_fix:parts += [(SCRIPT_STOP,script_stop()),(BYSTANDERS,bystanders(rush_support))]
+        if participants:parts += [(PROTECT,protect()),(PENDING,pending())]
+        if participants and shared_stop:parts.append((FOREIGN,foreign()))
     return parts
 
 
@@ -1140,12 +1292,15 @@ def validate_memory(ram,manager=None,count=None):
     if struct.unpack_from('<4I',ram,CONTROL)!=(MAGIC,manager,count,u(team_intro.BATTLE)):
         raise ValueError('Cinematic policy belongs to another capture')
     recognized=complete=None
-    for options in [(c,n,e,a,s,f,r) for c in (True,False) for n in ((True,False) if c else (False,))
+    # participants=True is the beta.37 emission; False is every earlier one, upgraded in place by build_memory.
+    for options in [(c,n,e,a,s,f,r,q) for c in (True,False) for n in ((True,False) if c else (False,))
                     for e in (True,False) for a in ((True,False) if n else (False,))
-                    for s in ((True,False) if a else (False,)) for f in (True,False) for r in (True,False)]:
-        complete,native_cameras,enhanced,activation,shared,stop_fix,rush_support=options
+                    for s in ((True,False) if a else (False,)) for f in (True,False) for r in (True,False)
+                    for q in ((True,False) if c else (False,))]:
+        complete,native_cameras,enhanced,activation,shared,stop_fix,rush_support,participants=options
         candidate=program(enhanced,complete_ultimates=complete,native_cameras=native_cameras,
-                          activation_cameras=activation,shared_stop=shared,script_stop_fix=stop_fix,rush_support=rush_support)+hooks(complete,stop_fix)
+                          activation_cameras=activation,shared_stop=shared,script_stop_fix=stop_fix,rush_support=rush_support,
+                          participants=participants)+hooks(complete,stop_fix)
         import four_player_mode
         candidate=[(p,four_player_mode.dependency_override(ram,p,b)) for p,b in candidate]
         if all(ram[p:p+len(data)]==data for p,data in candidate):
@@ -1153,11 +1308,11 @@ def validate_memory(ram,manager=None,count=None):
         # The previous shipped classifier differs only in its participant
         # pass. Match the complete old program, including viewport overrides,
         # at the capture's capacity; do not strand old 3/4-player checkpoints.
-        if complete and all(ram[p:p+len(data)]==data for p,data in candidate if p!=ULTIMATE_OWNER):
+        if complete and not participants and all(ram[p:p+len(data)]==data for p,data in candidate if p!=ULTIMATE_OWNER):
             previous=ultimate_owner(native_cameras,activation,shared,stop_fix,all_activations=False)
             if ram[ULTIMATE_OWNER:ULTIMATE_OWNER+len(previous)]==previous:
                 recognized=[(p,previous if p==ULTIMATE_OWNER else data) for p,data in candidate];break
-    if recognized is None and not PAL:  # USA-only frozen emissions
+    if recognized is None and not TRANSLATED:  # USA-only frozen emissions
         import json
         # Captures built before a shipped emitter change stay upgradeable: each frozen record is
         # one exact prior emission, never a relaxation of the current one.
@@ -1198,7 +1353,7 @@ def build_memory(ram,config=None,source='<offline-memory>',*,ultimate=False,tran
     if installed:
         installed_parts=validate_memory(ram,manager,count)
         import four_player_mode
-        current=[(p,four_player_mode.dependency_override(ram,p,b)) for p,b in program()+hooks()]
+        current=[(p,four_player_mode.dependency_override(ram,p,b)) for p,b in program(participants=True)+hooks()]
         parts=[]
         if installed_parts!=current:
             old=dict(installed_parts)
@@ -1229,7 +1384,7 @@ def build_memory(ram,config=None,source='<offline-memory>',*,ultimate=False,tran
             if ram[p:p+len(data)]!=data:raise ValueError(f'Pre-cinematic hook changed at{p:08X}')
         control=bytearray(0x100);struct.pack_into('<6I',control,0,MAGIC,manager,count,battle,int(ultimate),int(transformation))
         struct.pack_into('<I',control,TRANSFORM_VIEW,shared_form)
-        parts=program()+hooks()+[(CONTROL,bytes(control))]
+        parts=program(participants=True)+hooks()+[(CONTROL,bytes(control))]
     if installed:
         for off,value in ((16,ultimate),(20,transformation),(TRANSFORM_VIEW,shared_form)):
             data=struct.pack('<I',int(value))
@@ -1244,11 +1399,14 @@ def build_memory(ram,config=None,source='<offline-memory>',*,ultimate=False,tran
                        shared_stop=CONTROL+SHARED_STOP,transformation_view=CONTROL+TRANSFORM_VIEW,
                        hold_age=CONTROL+HOLD_AGE,hold_cooldown=CONTROL+HOLD_COOLDOWN,
                        hold_overruns=CONTROL+HOLD_OVERRUNS,hold_longest=CONTROL+HOLD_LONGEST,
-                       hold_block=CONTROL+HOLD_BLOCK,hold_total=CONTROL+HOLD_TOTAL),
+                       hold_block=CONTROL+HOLD_BLOCK,hold_total=CONTROL+HOLD_TOTAL,
+                       protect_updates=CONTROL+PROTECT_UPDATES,protect_last=CONTROL+PROTECT_LAST,
+                       latch_refused=CONTROL+LATCH_REFUSED),
         limitations=['Shared native cinematic timeline; unrelated simultaneous pairs cannot have independent authored tracks.',
                      'Paired rush framing remains in its participant viewport even when activation cinematics are disabled.',
                      'Native impact, resource loading, arena transition and menu holds remain intact.',
                      'Simultaneous actor-local ultimates use the first living physical caster for the shared view while all verified performers keep advancing.',
                      'Transformations retain their separate checkbox; their split screen presentation is a separate preference.',
                      'A frame that keeps the whole native global stop with no running camera has nothing shared to present and keeps its split views.',
+                     'The shared stop never holds the fighters the running authored camera binds, nor their live rush partners; everyone else outside the scene is held.',
                      'A shared stop is released after 900 consecutive holding updates and may not stop anyone again until 30 updates have passed with no presentation at all; past 2700 held updates in one battle it stops pausing anyone, so an unfinishable presentation costs seconds rather than the match.'])
