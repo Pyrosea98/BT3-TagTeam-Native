@@ -26,11 +26,14 @@ ROWS, NODES, EVENT_NODES, EVENT_PAYLOADS = 0x07510000,0x07515000,0x07515200,0x07
 END, ROW_BYTES, ROW_COUNT, ARENA_BYTES = 0x07520000,1344,12,0x100000
 GLOBAL, ALLOC_GLOBAL, HOOK = A(0x2FE9F8),A(0x2FEAE0),A(0x1C2A28)
 SAVED = tuple(range(1,29))+(30,31)
+# USA global IDs of stage 0's normal and split-screen files (iso_compatibility adapters stage_base,
+# split_stage_base); FILE_ID gives this disc's. Stage numbers stay below 35.
+STAGE_FILES, STAGE_LIMIT = (369, 408), 35
 META_CALLS = ((A(0x14AEC0),RESOURCE,A(0x14BC98),156),
               (A(0x14B27C),BLAST1,A(0x205370),2352),(A(0x14B588),BLAST2,A(0x205330),2348))
 
 
-def immutable_combat_literals(ram,models,addresses):
+def immutable_combat_literals(ram,models,addresses,avoid=()):
     """Prove apparent aliases are unchanged bytes of a loaded original asset.
 
     Character animation/combat files can contain packed constants that numerically equal
@@ -38,12 +41,27 @@ def immutable_combat_literals(ram,models,addresses):
     requires an actual registered owner's correctly identified animation/combat bundle
     and byte-for-byte agreement of the entire file with the original USA ISO.
     Unknown heap/stack/code values and any modified file still fail closed.
+    The same proof covers the owner's animation file (the record's second file),
+    which the game never writes after loading it (BT4 Spanish fighter 26's file
+    holds old+0x3B4); an animation file overlapping an `avoid` span (the rows,
+    the primary table, an effect arena) is never exempted. A mesh file (the
+    record's first) is relocated and holds model state once loaded, so there
+    each word is proven alone: the word and 16 bytes on each side must equal
+    the owner's mesh file on the disc at that offset (BT4 Spanish giants). A
+    leader's combat bundle (handle 0/1) is loaded and relocated by the game
+    itself, so it gets that per-word proof too when the whole file differs
+    (never where it overlaps an `avoid` span); an extra's bundle, loaded by
+    the mod, keeps the whole-file proof only.
     """
     if not addresses:return set(),[]
     import hashlib
     import pycdlib
     u=lambda p:struct.unpack_from('<I',ram,p)[0]
-    registry=u(A(0x2FEC44))+439276;files={}
+    registry=u(A(0x2FEC44))+439276;files={};meshes={}
+    def mesh_ids(character):
+        from native_map import NativeMapError
+        try:return {FILE_ID(10*character+1424+k) for k in range(8)}
+        except NativeMapError:return ()
     for model in models:
         resource=u(model+20);character=u(model+12)
         if not 0x100000<=resource<=len(ram)-56:continue
@@ -60,8 +78,19 @@ def immutable_combat_literals(ram,models,addresses):
     import game_profile
     path=game_profile.source_iso(ROOT.parent/'games'/regional.ISO_NAME)
     if not path.is_file():return set(),[]
-    if regional.PAL:
-        # file_id is the loaded (European) global ID: read that very file, by the disc's own numbering.
+    def windows(read):
+        # Mesh words: the word and 16 bytes on each side equal the disc file at that offset.
+        for (base,size,file_id),found in meshes.items():
+            data=read(file_id);length=len(data)
+            if length<=0 or ((length+2047)&-2048)!=size:continue
+            literals={p for p in found if p not in verified and p+20<=base+length and
+                      ram[p-16:p+20]==data[p-base-16:p-base+20]}
+            if not literals:continue
+            verified.update(literals)
+            receipts.append(dict(resource_file=file_id,address=base,bytes=length,proof='word-window',
+                                 sha256=hashlib.sha256(data).hexdigest(),literals=sorted(literals)))
+    if regional.DISC_REGION!='US':
+        # file_id is the loaded (European / Japanese) global ID: read that very file, by the disc's own numbering.
         verified=set();receipts=[]
         with regional.open_disc(path) as disc:
             for (base,size,file_id),found in files.items():
@@ -71,6 +100,7 @@ def immutable_combat_literals(ram,models,addresses):
                 verified.update(literals)
                 receipts.append(dict(resource_file=file_id,address=base,bytes=length,
                                      sha256=hashlib.sha256(data).hexdigest(),literals=sorted(literals)))
+            windows(disc.read)
         return verified,receipts
     iso=pycdlib.PyCdlib();iso.open(str(path));verified=set();receipts=[]
     try:
@@ -84,8 +114,65 @@ def immutable_combat_literals(ram,models,addresses):
                 verified.update(literals)
                 receipts.append(dict(resource_file=file_id,address=base,bytes=length,
                                      sha256=hashlib.sha256(data).hexdigest(),literals=sorted(literals)))
+            def read(file_id):
+                afs.seek(8+(file_id-1)*8);offset,length=struct.unpack('<2I',afs.read(8))
+                afs.seek(offset);return afs.read(length)
+            windows(read)
     finally:iso.close()
     return verified,receipts
+
+
+def immutable_stage_literals(ram,addresses,avoid=()):
+    """Prove apparent aliases inside the loaded stage file are unchanged disc bytes.
+
+    The native loader reads the match's stage file (normal or split-screen)
+    whole into one buffer that starts 0x80 bytes before the native stage
+    object A(0x2FEBE0) (every supported disc). A stage file can hold packed
+    constants that equal an effect-row address (BT4 English stage 70, file
+    1593, holds old+0x7E0 at file offset 0x5E46A0: beta.36 refused every match
+    there). The stage is relocated in place once loaded, so each word is
+    proven alone, as in a mesh: the word and 16 bytes on each side equal the
+    disc file at that offset. The file is the scene's stage (A(0x331DC8)+28),
+    normal or split-screen, whose first 64 bytes are at the buffer; a buffer
+    overlapping an `avoid` span (the rows, the primary table, an effect arena)
+    or a stage without reviewed file IDs proves nothing.
+    """
+    if not addresses:return set(),[]
+    import hashlib
+    from native_map import NativeMapError
+    u=lambda p:struct.unpack_from('<I',ram,p)[0]
+    stage,base=u(A(0x331DC8)+28),u(A(0x2FEBE0))-0x80
+    if not 0<=stage<STAGE_LIMIT or not 0x100000<=base<=len(ram)-0x80:return set(),[]
+    try:candidates=[file_id for file_id in (FILE_ID(first+stage) for first in STAGE_FILES) if file_id>0]
+    except NativeMapError:return set(),[]
+    import game_profile
+    path=game_profile.source_iso(ROOT.parent/'games'/regional.ISO_NAME)
+    if not path.is_file():return set(),[]
+
+    def prove(read):
+        for file_id in candidates:
+            try:data=read(file_id)
+            except Exception:continue  # noqa: BLE001 - an unreadable file proves nothing
+            length=len(data)
+            if length<0x80 or base+length>len(ram) or ram[base:base+64]!=data[:64]:continue
+            if any(base<end and start<base+length for start,end in avoid):return set(),[]
+            literals={p for p in addresses if base+16<=p and p+20<=base+length and
+                      ram[p-16:p+20]==data[p-base-16:p-base+20]}
+            if not literals:return set(),[]
+            return literals,[dict(resource_file=file_id,address=base,bytes=length,proof='stage-window',
+                                  sha256=hashlib.sha256(data).hexdigest(),literals=sorted(literals))]
+        return set(),[]
+    if regional.DISC_REGION!='US':
+        with regional.open_disc(path) as disc:return prove(disc.read)
+    import pycdlib
+    iso=pycdlib.PyCdlib();iso.open(str(path))
+    try:
+        with iso.open_file_from_iso(iso_path='/DATA/PZS3US1.AFS;1') as afs:
+            def read(file_id):
+                afs.seek(8+(file_id-1)*8);offset,length=struct.unpack('<2I',afs.read(8))
+                afs.seek(offset);return afs.read(length)
+            return prove(read)
+    finally:iso.close()
 
 
 def bridge(code, previous, field):
@@ -210,6 +297,49 @@ def absent_special_resource(ram, model, slot):
     return start==end and 4*(count+2)<=start<=size
 
 
+def effect_arena_spans(ram, allocator):
+    """[(base, base+capacity)] of the nine native effect bump arenas in the allocator registry. Unchecked: the callers
+    validate the registry; this only feeds the overlap guard of native_stream_buffers."""
+    spans=[]
+    for group in range(9):
+        base,_,capacity,_=struct.unpack_from('<4I',ram,allocator+group*16)
+        spans.append((base,base+capacity))
+    return spans
+
+
+def native_stream_buffers(ram, avoid=()):
+    """[(lo, hi)] EE byte ranges the native ADX stream handles own (CRI ADXT 9.71 on every supported disc). Channel
+    table A(0x2C7070), six rows of 20 bytes (the native 265970 reads table[ch*20]); ch0 is the match music, ch1 a
+    second stream, ch2-5 voices. Per handle (+0x20: ibuf, ibufbsize, ibufxsize, obuf, obufsize, obufdist): the
+    decoded PCM (obuf, 2*obufdist*maxnch bytes) and, right after it, the ring of raw file bytes (ibuf,
+    ibufbsize+ibufxsize). The streams keep refilling these while the frame is held, so any 32-bit value of a song can
+    sit there; the engine never stores pointers in them (BT4 Spanish 'Hero - Kibou no Uta -' holds a special-row
+    address at file offset 0x7AC80). Fail-closed: a handle not in use or not laid out exactly so, a range that
+    overlaps an `avoid` span (native effect state), or a disc without a reviewed table address adds no range."""
+    from native_map import NativeMapError
+    u=lambda p:struct.unpack_from('<I',ram,p)[0]
+    try:table=A(0x2C7070)
+    except NativeMapError:return []
+    ranges=[]
+    for channel in range(6):
+        handle=u(table+20*channel)
+        if not 0x100000<=handle<=0x2000000-0x40:continue
+        used,maxnch=ram[handle],ram[handle+3]
+        ibuf,ibufbsize,ibufxsize,obuf,obufsize,obufdist=struct.unpack_from('<6I',ram,handle+0x20)
+        if used!=1 or maxnch not in (1,2):continue
+        if not (0<ibufbsize<=0x200000 and ibufxsize<=0x1000 and 0<obufsize<=obufdist<=0x10000):continue
+        lo,hi=obuf,ibuf+ibufbsize+ibufxsize
+        if obuf+2*obufdist*maxnch!=ibuf or not 0x100000<=lo<hi<=0x2000000:continue
+        if any(lo<end and start<hi for start,end in avoid):continue
+        ranges.append((lo,hi))
+    return ranges
+
+
+def outside(addresses, ranges):
+    """The addresses inside none of the [lo, hi) ranges, in their order."""
+    return [a for a in addresses if not any(lo<=a<hi for lo,hi in ranges)]
+
+
 def pointer_word_indices(words, base, span):
     """Exactly np.flatnonzero((words>=base)&(words<base+span)&((words&3)==0)).
 
@@ -269,7 +399,10 @@ def build_memory(ram, config=None, source='<offline-memory>'):
             # classes may leave copies in inactive descendant payloads too.
             refs.update(matches)
     words=np.frombuffer(ram,dtype='<u4');indices=pointer_word_indices(words,old,2688)
-    observed=set(int(i)*4 for i in indices)
+    # Song and voice bytes streaming through the native ADX buffers are data, never cached row pointers.
+    guard=[(old,old+2688),(primary,primary+12)]+effect_arena_spans(ram,allocator)
+    streams=native_stream_buffers(ram,guard)
+    observed=set(outside((int(i)*4 for i in indices),streams))
     permitted_targets={old+mid*ROW_BYTES+slot*80 for mid in range(2) for slot in range(5)}
     permitted_targets.update(old+mid*ROW_BYTES+480+slot*140 for mid in range(2) for slot in range(5))
     arenas=[]
@@ -279,7 +412,15 @@ def build_memory(ram, config=None, source='<offline-memory>'):
         arenas.append((base,base+used))
     unknown={address for address in observed if u(address) not in permitted_targets or
              not any(lo<=address<=hi-4 for lo,hi in arenas)}
-    immutable,asset_receipts=immutable_combat_literals(ram,models,unknown)
+    immutable,asset_receipts=immutable_combat_literals(ram,models,unknown,guard)
+    if unknown-immutable:
+        # Only words the fighter assets leave unproven: an image the earlier code accepted is unchanged.
+        staged,stage_receipts=immutable_stage_literals(ram,unknown-immutable,guard)
+        immutable,asset_receipts=immutable|staged,asset_receipts+stage_receipts
+    stray=sorted(unknown-immutable)
+    if stray:
+        raise ValueError('Additional cached primary-row reference prevents safe relocation '
+                         f'({len(stray)} word(s), first {u(stray[0]):#010x} at {stray[0]:#010x})')
     for address in observed-immutable:
         # Reject stack/code/unknown-heap aliases. Only pointers to exact typed
         # row/metadata boundaries inside captured native effect bump arenas

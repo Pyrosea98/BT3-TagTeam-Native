@@ -115,6 +115,37 @@ def return_destination(result_flags, reason_flags):
     return None
 
 
+# The same dispatcher also sends reason 0x800 to scene 6 and 0x1000 to scene 0x38
+# (disassembled at 336BC8/336BE0). No clean checkpoint is captured for either.
+FALLBACK_REASONS = 0x800 | 0x1000
+
+
+# The boot/title scene. A match never exits to it: seen after a match with no result latched, the game
+# restarted (a PCSX2 reset, or the game rebooting itself after a crash).
+BOOT = 1
+
+
+def restarted(result_flags, reason_flags, scene):
+    """True for the boot scene after a match with no result latched (autopilot.game_restarted)."""
+    return scene == BOOT and not result_flags & 8
+
+
+def fallback_destination(result_flags, reason_flags, scene=None):
+    """The safe top level for a post-match exit no captured menu matches, or None.
+
+    'main' for a latched result whose reason is 0x800 or 0x1000, and for the Duel menu
+    (scene 0x26) reached before any destination latched; return_destination wins over
+    both. Callers act on it only once two consecutive polls agree.
+    """
+    if return_destination(result_flags, reason_flags) is not None:
+        return None
+    if result_flags & 8 and reason_flags & FALLBACK_REASONS:
+        return 'main'
+    if scene == DUEL:
+        return 'main'
+    return None
+
+
 @lru_cache(maxsize=1)
 def native_guards():
     from prototype import ROOT, elf_reader

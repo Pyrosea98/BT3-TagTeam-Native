@@ -45,7 +45,7 @@ def normalize(config):
         raise ValueError(f'Fresh mode supports {policy.MIN_ACTORS}..{policy.MAX_ACTORS} fighters')
     for i, row in enumerate(rows):
         if row['physical_id'] != i or row['team'] != i & 1 or not 0 <= row['model_id'] < 12:
-            raise ValueError('Physical IDs must be ordered by alternating teams and use registered model IDs0..11')
+            raise ValueError('Physical IDs must be ordered by alternating teams and use registered model IDs 0..11')
     for key in ('actor', 'model_id', 'model'):
         if len({row[key] for row in rows}) != n:
             raise ValueError(f'Every fighter needs a distinct {key}')
@@ -159,7 +159,7 @@ def program(n, targets=None, free_for_all=False):
 def read_source(source):
     ram = published(source)  # a preparation's in-memory stage image
     if ram is None: ram = Path(source).read_bytes()
-    if len(ram) != 0x8000000: raise ValueError('Requires complete128MiB EE RAM')
+    if len(ram) != 0x8000000: raise ValueError('Requires complete 128 MiB EE RAM')
     return ram, lambda p: struct.unpack_from('<I', ram, p)[0]
 
 
@@ -180,10 +180,10 @@ def validate_world(ram, u, config):
         for value, size in ((actor, 0x1600), (model, 0x1680), (dataset, 4)):
             if not 0x100000 <= value <= len(ram)-size: raise ValueError('Invalid actor/model/dataset pointer')
         if actor % 16 or u(actor) != i or u(actor+8) != i&1 or u(actor+12) != row['model_id']:
-            raise ValueError(f'Actor{i} identity/team/model changed')
+            raise ValueError(f'Actor {i} identity/team/model changed')
         if u(actor+0x994) >= 5: raise ValueError('Native roster slot must remain0..4')
         if u(A(0x31C640)+row['model_id']*4) != model or u(model+16) != row['model_id'] or u(model+2356) != dataset:
-            raise ValueError(f'Actor{i} registered model/dataset changed')
+            raise ValueError(f'Actor {i} registered model/dataset changed')
         if u(model+4) != 1 or u(model+8) != int(i < 2) or u(actor+0x1278):
             raise ValueError('All CPUs must be off; extra models must remain initialized and hidden')
     return manager, ai

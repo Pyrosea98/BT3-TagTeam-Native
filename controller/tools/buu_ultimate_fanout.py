@@ -7,7 +7,7 @@ independent row/descriptor and target, and let the native effect/collision code
 do the rest. Parent destruction drains children before freeing the extension.
 No target-table, actor-damage, allocator-alias or original-resource writes.
 """
-from native_map import A, CRC, PAL, SERIAL, elf_path
+from native_map import A, CRC, SERIAL, TRANSLATED, elf_path
 import struct
 from prototype import Assembler, ROOT, elf_reader
 import fresh_team_combat as core
@@ -337,7 +337,7 @@ def legacy_pieces(filename='buu_fanout_legacy.json'):
 
 
 def installed_legacy(ram):
-    if PAL:raise ValueError('Multi-target projectile code changed')  # USA-only legacy images
+    if TRANSLATED:raise ValueError('Multi-target projectile code changed')  # USA-only legacy images
     for name in ('buu_fanout_legacy.json','buu_fanout_family1_legacy.json'):
         parts=legacy_pieces(name)
         if all(ram[at:at+len(data)]==data for at,data in parts):return parts

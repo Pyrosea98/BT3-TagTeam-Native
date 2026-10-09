@@ -1,8 +1,10 @@
 """One deliberate loading cover over the isolated emulator, without taking focus.
 
 The controller only exchanges JSON with an owned helper process. The helper
-has no PINE client, keyboard injection or emulator-memory access. It temporarily
-mutes only that emulator's audio sessions and restores their previous values.
+has no PINE client, keyboard injection or emulator-memory access. While a
+loading cover (never a failure cover) is up it mutes only that emulator's audio
+sessions, and unmutes them afterwards unless the player had muted the game
+(loading_audio).
 It disappears if the watcher dies, and follows the emulator's client bounds.
 """
 import runtime_profile
@@ -42,7 +44,7 @@ def normalize_teams(teams):
             if isinstance(fighter,int):fighter={'character_id':fighter}
             character=fighter.get('character_id')
             if isinstance(character,bool) or not isinstance(character,int) or not 0<=character<161:
-                raise ValueError(f'Invalid selected character ID {character!r}')
+                raise ValueError('Invalid selected character ID')
             info=character_info(character)
             # Do not let metadata ask the helper to open arbitrary external files.
             if 'player' in fighter:
@@ -126,14 +128,18 @@ class LoadingPresentation:
         with self.lock:
             return self.guest.prerender(messages) if self.guest else False
 
-    def show(self, title='Preparing your team match', message='Getting your fighters ready...', progress=0,
-             mute_audio=True):
+    def show(self, title='Preparing your team match', message='Getting your fighters ready...', progress=0, *, error=None):
+        """error=(line 1, line 2): the failure state of the in-game cover (never pre-rendered)."""
         with self.lock:
-            guest_surface = self.guest.show(message, progress) if self.guest else False
-            self.last = dict(visible=True, title=title, message=message, mute_audio=bool(mute_audio),
+            if error:
+                guest_surface = self.guest.show(message, progress, error=tuple(error)) if self.guest else False
+            else:
+                guest_surface = self.guest.show(message, progress) if self.guest else False
+            self.last = dict(visible=True, title=title, message=message,
                              progress=max(0, min(100, int(progress))),teams=self.teams,
                              mode=self.mode, humans=self.humans,
                              guest_surface=guest_surface)
+            if error: self.last['error'] = list(error)
             self._write()
             if self.helper and (self.process is None or self.process.poll() is not None):
                 with self.path.with_suffix('.helper.log').open('a', encoding='utf-8') as output:
@@ -387,7 +393,7 @@ class Windows:
 
 
 def run_cover(path, parent_pid, emulator):
-    from loading_audio import AudioMute
+    from loading_audio import AudioMute, cover_mutes, repaired_sessions
     from native_loading_window import NativeLoadingWindow
     from loading_surface_refresh import refresh
     api = Windows()
@@ -401,6 +407,11 @@ def run_cover(path, parent_pid, emulator):
     window = NativeLoadingWindow(api)
     last_ack = 0; last_audio = 0; owner_pid = None; audio_failed = False; acked = None
     previous = None; diagnostic = None; data = {}; last_refresh = None; surface_refresh = None
+    # Helper start: unmute the private PCSX2 once its sessions appear (Windows keeps a mute an
+    # earlier session left), whenever no loading cover mutes. Bounded: 60 s, then the
+    # Play-launch repair (loading_audio.py --repair) alone watches for new sessions. A mute
+    # found later on a session checked here is the player's, and loading covers keep it.
+    repaired = set(); repair_until = time.monotonic()+60; last_repair = 0
     try:
         while not window.closed and api.alive(parent_pid):
             window.pump()
@@ -432,10 +443,30 @@ def run_cover(path, parent_pid, emulator):
             if marker != diagnostic:
                 print('Loading cover: '+json.dumps(evidence), flush=True)
                 diagnostic = marker
-            if (loading and owner_pid is not None and now-last_audio >= .5) or (not loading and audio.records):
+            # Only the loading cover mutes: a failure cover (its command carries 'error') unmutes
+            # on the tick it is read, like a hidden cover.
+            muting = loading and cover_mutes(data)
+            repair = repair_until is not None and not muting and now-last_repair >= .5
+            if (muting and now-last_audio >= .5) or (not muting and audio.records) or repair:
                 try:
-                    if audio.records: audio.restore()
-                    if loading and owner_pid is not None: audio.unmute(owner_pid)
+                    # Sessions the Play-launch repair checked (its audio-repaired.json beside this command)
+                    # are checked for this helper too. On every checked session a mute found later is the
+                    # player's: a loading cover puts it back (keep), and the start check leaves it alone.
+                    repaired.update(repaired_sessions(path.parent))
+                    before = len(audio.records)
+                    if muting and owner_pid is not None: audio.mute(owner_pid, keep=repaired)
+                    elif not muting:
+                        if audio.records: audio.restore()
+                        if repair:
+                            last_repair = now
+                            if time.monotonic() >= repair_until: repair_until = None  # this try is the last
+                            unmuted = audio.repair(seen=repaired)
+                            if unmuted:
+                                print(f'Loading audio: unmuted {unmuted} session(s) that started muted.', flush=True)
+                            if repaired: repair_until = None
+                    if len(audio.records) != before:
+                        print(f'Loading audio: {len(audio.records)} owned session(s) muted for the loading screen; '
+                              'each is unmuted when it ends.', flush=True)
                 except Exception as error:
                     if not audio_failed:
                         print(f'Loading audio control unavailable: {error}', flush=True)

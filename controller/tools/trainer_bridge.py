@@ -44,7 +44,9 @@ def body_status(p, manager, count):
 def defusion_pending(p, manager, count):
     import fusion_duration as duration
     identity=struct.unpack('<4I',p.read(duration.CONTROL,16))
-    return (identity==(duration.MAGIC,manager,count,1) and
+    # The service claim (CONTROL+12) is a watcher token (fusion_duration_worker.OWNER); the
+    # guest only tests it for zero, and so does this check.
+    return (identity[:3]==(duration.MAGIC,manager,count) and identity[3]!=0 and
             any(p.read_u32(duration.RECORDS+i*duration.STRIDE)==3 for i in range(count)))
 
 
@@ -96,6 +98,9 @@ def snapshot(p):
             fighter[name+'_max'] = word(data, row+maximum)
         fighter['alive'] = 0 < fighter['hp'] <= 0x1000000
         state['fighters'].append(fighter)
+    import story_runtime
+    story=story_runtime.snapshot(p)
+    if story is not None:state['story']=story
     return state
 
 

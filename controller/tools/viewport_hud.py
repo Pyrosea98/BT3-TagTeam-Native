@@ -17,7 +17,9 @@ import hud_subject
 import spectator_takeover as spectator
 from regional import DISPLAY_H, SCISSOR_Y1, Y_ORIGIN
 
-CODE, ACTIVE, DRAW, PANEL, NUMBER = 0x072D0000,0x072D0400,0x072D0800,0x072D1800,0x072D3000
+# The four-view cinematic checks need more than 1 KiB. Keep their code clear
+# of DRAW; its 736-byte body still fits comfortably before POST at +0x1000.
+CODE, ACTIVE, DRAW, PANEL, NUMBER = 0x072D0000,0x072D0400,0x072D0900,0x072D1800,0x072D3000
 POST, SCISSOR = 0x072D1000,0x072D3800
 CONTROL, VIEWS, END = 0x072DF000,0x072DF100,0x072E0000
 MAGIC=0x56504831
@@ -114,7 +116,29 @@ def active(shared_ultimate=True,shared_form=True,form_fallback=True,quad_support
     data=a.finish();assert len(data)<=DRAW-ACTIVE;return data
 
 
-def wrapper(previous,legacy=False,revival=True,deferred=False):
+# Optional per-view HUD extensions (beta.37), drawn in every view right after the revival text. Each listed
+# module's hud_extension(ram) returns (control, magic, draw) while its caption is installed, else None. With none
+# installed the wrapper and the quad pass are byte-identical to the previous release.
+HUD_EXTENSION_MODULES=('beam_struggle',)
+
+
+def hud_extensions(ram,installing=None):
+    """Installed per-view HUD extensions in list order; installing={module: entry} adds one being installed."""
+    import importlib
+    found=[]
+    for name in HUD_EXTENSION_MODULES:
+        entry=(installing or {}).get(name) or importlib.import_module(name).hud_extension(ram)
+        if entry:found.append(tuple(entry))
+    return tuple(found)
+
+
+def extension_calls(a,extensions,tag):
+    for k,(control,magic,draw) in enumerate(extensions):
+        a.li(8,control);a.lw(9,8);a.li(10,magic);a.branch(5,9,10,f'{tag}{k}')
+        a.call(draw);a.label(f'{tag}{k}')
+
+
+def wrapper(previous,legacy=False,revival=True,deferred=False,extensions=()):
     a=Assembler(CODE);save(a);a.call(previous);a.i(63,2,29,0x100);a.i(63,3,29,0x108)
     a.r(16,8,0);a.i(63,8,29,0xE0);a.r(18,8,0);a.i(63,8,29,0xE8)
     if not deferred:a.call(DRAW)
@@ -127,6 +151,7 @@ def wrapper(previous,legacy=False,revival=True,deferred=False):
         import teammate_revive as revive
         a.li(8,revive.CONTROL);a.lw(9,8);a.li(10,revive.MAGIC);a.branch(5,9,10,'no_revive')
         a.call(revive.DRAW);a.label('no_revive')
+        extension_calls(a,extensions,'no_extension')
     a.i(55,2,29,0x100);a.i(55,3,29,0x108);restore(a,skip=(2,3));a.jr();return a.finish()
 
 
@@ -485,11 +510,11 @@ def post_code(sizing=True,placement=True,inset=True,outward=True,pair_offset=8,q
     a.label('done');restore(a);a.jr();data=a.finish();assert len(data)<PANEL-POST;return data
 
 
-def pieces(previous,legacy=False,styled=True,revival=True,native=True,repaired=True,layers=True,sizing=True,shared_ultimate=True,placement=True,inset=True,outward=True,safe_edges=True,shared_form=True,isolated=True,pair_offset=8,form_fallback=True):
+def pieces(previous,legacy=False,styled=True,revival=True,native=True,repaired=True,layers=True,sizing=True,shared_ultimate=True,placement=True,inset=True,outward=True,safe_edges=True,shared_form=True,isolated=True,pair_offset=8,form_fallback=True,extensions=()):
     import viewport_hud_art as art
     native=native and styled and revival and not legacy
     shared=shared_ultimate and native and repaired and layers and sizing
-    result=[(CODE,wrapper(previous,legacy,revival,deferred=native and repaired)),(ACTIVE,active(shared,shared_form and shared,form_fallback)),(DRAW,draw()),
+    result=[(CODE,wrapper(previous,legacy,revival,deferred=native and repaired,extensions=extensions)),(ACTIVE,active(shared,shared_form and shared,form_fallback)),(DRAW,draw()),
             (PANEL,panel(legacy,styled,native)),(NUMBER,number())]
     if native:
         if not repaired:
@@ -539,7 +564,7 @@ def build_memory(ram,source='<prepared>',views=DEFAULT_VIEWS,settings=None):
         descriptor_bytes=b''.join(struct.pack('<6I',*v) for v in views)
         if ram[VIEWS:VIEWS+len(descriptor_bytes)]!=descriptor_bytes:raise ValueError('Viewport HUD descriptors changed')
         import four_player_mode
-        current=[(p,four_player_mode.dependency_override(ram,p,b)) for p,b in pieces(previous)]
+        current=[(p,four_player_mode.dependency_override(ram,p,b)) for p,b in pieces(previous,extensions=hud_extensions(ram))]
         import lockoff_target
         current=[(p,lockoff_target.dependency_override(ram,p,b)) for p,b in current]
         if all(ram[p:p+len(d)]==d for p,d in current):

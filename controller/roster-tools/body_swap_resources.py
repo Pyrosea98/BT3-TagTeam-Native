@@ -70,7 +70,7 @@ def io_memory(ram, snapshot, physical):
     for p,n in (RANGE(0x2654D8,0x58),(A(0x26B5E8),0x38),(A(0x26AA40),0x38),
                 (A(0x2554D8),0x30),(A(0x255508),0x68),(A(0x24B238),0x60),
                 (A(0x265298),0x180),(A(0x255BD8),0x28),(A(0x255B88),0x50),(A(0x255978),0x68)):
-        require(preload.native_io_helper_matches(ram,swap.NATIVE,p,n),f'Native body IO helper changed:{p:08X}')
+        require(ram[p:p+n]==swap.NATIVE(p,n),f'Native body IO helper changed:{p:08X}')
     values=dict(ENTRY=IO,INNER=INNER,QUEUE=QUEUE,CONTROL=IO_CONTROL)
     capacities=NATIVE_CAPACITIES if physical<2 else None
     entry=preload.core.rebound(io.entry_code,**values)()
@@ -127,7 +127,7 @@ def stage_memory(ram, snapshot, physical):
     copied=u(ram,IO_CONTROL+body_swap_copy.COPY_MARKER)==body_swap_copy.MAGIC
     if copied:body_swap_copy.validate_staging(ram,donor,row)
     else:
-        require((u(ram,pool+439156)&0x7FFF).bit_count()<15,'No temporary texture group available')
+        require(stage.texture_groups(ram)['group'] is not None,'No temporary texture group available')
         require(not row['geometry_initialized'],'Body staging requires freshly loaded geometry')
     require(not any(ram[STAGE:0x07060000]),'Body staging reservation is occupied')
     at=stage.creator.EXT_ENTRY;original=bytes(ram[at:at+8])

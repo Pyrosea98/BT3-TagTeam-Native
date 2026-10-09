@@ -8,6 +8,7 @@ from native_map import A
 import struct
 import extra_reload_preload as preload
 import extra_reload_service as io
+import extra_reload_stage as stage
 import selected_team_prepare as creator
 import extra_reload_heap as heap
 
@@ -61,6 +62,19 @@ def largest_free_block(ram):
     return 0
 
 
+def texture_room(ram):
+    """Texture groups for the Android, the queued form and two spare for native temporaries.
+
+    The form is rechecked by extra_reload_worker.candidate under the same hold after the
+    Android's constructor has taken the lowest free group: it needs a raw mask below 13 (the
+    two-spare rule the guest form admission reads) and one group no live model uses. Counting
+    used groups (the raw mask plus every live model's group, extra_reload_stage.texture_groups)
+    keeps both true and still leaves two spare groups after the form, even when a destructor
+    cleared a live model's bit. Below this, the visual is skipped before any allocation.
+    """
+    return stage.texture_groups(ram)['used'].bit_count()<=11
+
+
 def preflight(ram,physical,character,costume=0):
     """None or a safe visual-skip reason, before claiming/allocating anything.
 
@@ -104,7 +118,8 @@ def preflight(ram,physical,character,costume=0):
             occupied+=1
     pool=u(preload.REGISTRY_GLOBAL)
     if occupied>10 or u(pool+69128)<2:return 'two spare model slots are required'
-    if (u(pool+439156)&0x7FFF).bit_count()>13:return 'two spare texture groups are required'
+    if not texture_room(ram):
+        return 'four free texture groups are required (Android, next form and two spare)'
     if u(pool+397320)<DRAW_BUDGET[character]:return 'not enough draw nodes for Android and next form'
     if largest_free_block(ram)<heap_budget():return 'not enough contiguous memory for Android and next form'
     return None

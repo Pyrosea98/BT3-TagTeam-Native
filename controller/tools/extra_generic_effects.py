@@ -67,25 +67,27 @@ def owned(a,fallback,extra=False):
     a.label('found')
 
 
+# Guest stack frames are multiples of 16 bytes (LS-2): the BIOS saves a preempted thread with sq (aligned
+# down to 16) and sd HI/LO at exact offsets, so with $sp = 8 mod 16 its saved $gp became LO1 on resume.
 def resource_code():
     # Only the native pool initializer passes an actual model into12CDE8.
     # All ordinary physical-ID callers retain2053B0's original semantics.
-    a=Assembler(RESOURCE);a.addiu(29,29,-24)
+    a=Assembler(RESOURCE);a.addiu(29,29,-32)
     for i,r in enumerate((8,9,10)):a.i(63,r,29,i*8)
     a.li(8,CONTROL);a.lw(9,8,16);a.branch(4,9,0,'native')
     a.lw(9,8,20);a.branch(5,9,4,'native')
     a.lw(9,8,4);a.lw(10,28,-22364);a.branch(5,9,10,'native')
     a.lw(9,8,24);a.lw(2,9,88)
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jr()
+    a.addiu(29,29,32);a.jr()
     a.label('native')
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jump(A(0x2053B0))
+    a.addiu(29,29,32);a.jump(A(0x2053B0))
     return a.finish()
 
 
 def lookup_code(previous):
-    a=Assembler(LOOKUP);a.addiu(29,29,-24)
+    a=Assembler(LOOKUP);a.addiu(29,29,-32)
     for i,r in enumerate((8,9,10)):a.i(63,r,29,i*8)
     owned(a,'native');a.i(11,9,5,10);a.branch(4,9,0,'zero')
     a.r(0,2,0,4,1);a.r(0x21,2,2,4);a.r(0,2,0,2,4)
@@ -93,27 +95,27 @@ def lookup_code(previous):
     a.lw(2,3,8);a.jump('done');a.label('zero');a.move(2,0)
     a.label('done')
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jr()
+    a.addiu(29,29,32);a.jr()
     a.label('native')
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jump(previous)
+    a.addiu(29,29,32);a.jump(previous)
     return a.finish()
 
 
 def predicate():
-    a=Assembler(PRED);a.addiu(29,29,-24)
+    a=Assembler(PRED);a.addiu(29,29,-32)
     for i,r in enumerate((8,9,10)):a.i(63,r,29,i*8)
     owned(a,'native');a.move(2,0)
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jr()
+    a.addiu(29,29,32);a.jr()
     a.label('native')
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jump(OLD_PRED)
+    a.addiu(29,29,32);a.jump(OLD_PRED)
     return a.finish()
 
 
 def tracker_wrapper(index,previous):
-    a=Assembler(TRACK_WRAPPERS+index*0x200);a.addiu(29,29,-40)
+    a=Assembler(TRACK_WRAPPERS+index*0x200);a.addiu(29,29,-48)
     for i,r in enumerate((2,3,8,9,10)):a.i(63,r,29,i*8)
     if index%3==2:
         # Native effect objects can outlive the actor manager, generic module
@@ -129,10 +131,10 @@ def tracker_wrapper(index,previous):
         a.label('found')
     else:owned(a,'native',extra=True)
     for i,r in enumerate((2,3,8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,40);a.jump(TRACK_COPIES+index*0x100)
+    a.addiu(29,29,48);a.jump(TRACK_COPIES+index*0x100)
     a.label('native')
     for i,r in enumerate((2,3,8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,40);a.jump(previous)
+    a.addiu(29,29,48);a.jump(previous)
     result=a.finish();assert len(result)<=0x200;return result
 
 
@@ -164,7 +166,7 @@ def destroy_code():
 
 
 def free_code():
-    a=Assembler(FREE);a.addiu(29,29,-24)
+    a=Assembler(FREE);a.addiu(29,29,-32)
     for i,r in enumerate((8,9,10)):a.i(63,r,29,i*8)
     a.li(8,CONTROL);a.lw(9,8,28);a.li(10,GLOBAL);a.lw(10,10);a.branch(5,9,10,'done')
     a.lw(10,9,4);a.li(8,ROWS);a.branch(5,10,8,'done')
@@ -172,7 +174,7 @@ def free_code():
     a.addiu(9,0,90);a.sw(9,8);a.sw(0,8,16)
     a.label('done')
     for i,r in enumerate((8,9,10)):a.i(55,r,29,i*8)
-    a.addiu(29,29,24);a.jump(FREE_TAIL);return a.finish()
+    a.addiu(29,29,32);a.jump(FREE_TAIL);return a.finish()
 
 
 def initialize(previous,actors,mids,models,primary,allocator,rootpool):
@@ -245,8 +247,14 @@ def build_memory(ram,config=None,source='<offline-held>'):
     row=u(primary+4);root=u(primary);allocator=u(special.ALLOC_GLOBAL)
     require(ptr(row,96) and ptr(root,24) and not u(root+12),'Invalid original generic roots')
     require(ptr(allocator,156) and u(allocator+152)==0x3FE,'Expected native bump allocator registry')
-    words=np.frombuffer(ram,dtype='<u4');refs=set(int(i)*4 for i in special.pointer_word_indices(words,row,96))
-    require(refs=={primary+4},'Cached generic row references prevent safe relocation')
+    # Song and voice bytes streaming through the native ADX buffers are data, never cached row pointers.
+    streams=special.native_stream_buffers(ram,[(row,row+96),(primary,primary+12),(root,root+24)]+
+                                          special.effect_arena_spans(ram,allocator))
+    words=np.frombuffer(ram,dtype='<u4')
+    refs=set(special.outside((int(i)*4 for i in special.pointer_word_indices(words,row,96)),streams))
+    stray=sorted(refs-{primary+4})
+    require(refs=={primary+4},'Cached generic row references prevent safe relocation'+
+            (f' ({len(stray)} word(s), first {u(stray[0]):#010x} at {stray[0]:#010x})' if stray else ''))
     for mid in range(2):
         rootnode=u(row+48*mid);require(ptr(rootnode,64) and u(rootnode+32)==root and
                 u(rootnode+40)==A(0x2C3BC8) and u(rootnode+36)==u(row+48*mid+4),'Invalid original generic hierarchy')

@@ -42,6 +42,6 @@ def require_version(version):
     import pcsx2_versions as versions  # loaded on use: importing this module never needs the data file
     if NAME=='runtime28':
         if not versions.player_accepts(version):
-            raise ValueError(f'{NAME} requires {versions.player_requirement()}, received {version}')
+            raise ValueError(f"This installation's PCSX2 ({NAME}) must be {versions.player_requirement()}; it reports {version}")
     elif not versions.developer_accepts(version):
-        raise ValueError(f'{NAME} requires PCSX2 v{versions.text(versions.policy()["developer"])}, received {version}')
+        raise ValueError(f'The developer PCSX2 ({NAME}) must be v{versions.text(versions.policy()["developer"])}; it reports {version}')

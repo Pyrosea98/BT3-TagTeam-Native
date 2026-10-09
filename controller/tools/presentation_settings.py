@@ -3,8 +3,8 @@
 Apply before PCSX2 starts; a separate watchdog restores the individual keys
 after that process exits, even if its launcher/watcher is stopped. A retained
 receipt is also recovered on the next launch. A key the emulator duplicated (its INI
-allows the same key twice) is collapsed to one entry and restored as it was found. All four original display values
-and the original start-paused preference are restored, preserving unrelated edits. No audio or controller settings
+allows the same key twice) is collapsed to one entry and restored as it was found. Display values, the manual graphics
+fix switch and the original start-paused preference are restored, preserving unrelated edits. No audio or controller settings
 are changed by this module. Savestate compression is pinned to Zstandard for the session the same way, so the
 states the mod reads never use a method it cannot decode; the player's own choice comes back afterwards.
 """
@@ -25,7 +25,12 @@ RECEIPT = ROOT / ('analysis/presentation-settings.json' if runtime_profile.NAME 
 SECTION = 'EmuCore/GS'
 # v2.5.211 uses OsdMessagesPos (integer enum None=0); retain legacy coverage.
 VALUES = {'OsdMessagesPos': '0', 'OsdShowMessages': 'false', 'OsdShowIndicators': 'false',
-          'FullscreenMode': ''}  # Borderless fullscreen allows the loading cover.
+          'FullscreenMode': '',  # Borderless fullscreen allows the loading cover.
+          # PCSX2's game database chooses version-appropriate half-pixel/native-scaling
+          # corrections. Manual fixes bypass them and can offset the cel-shaded image
+          # from its outlines at upscaled resolutions. Never hard-code those enums or
+          # lower the user's resolution; restore this switch after the session.
+          'UserHacks': 'false'}
 # Loading and split-screen speed from Mod Settings, applied for the launcher's session only.
 # Fast CDVD halves emulated disc sector/read delays under 100 ms (measured: a 5v5's native load
 # 21-22 s -> 19 s and its extra-fighter disc wait 13.9 s -> 9.5 s). 'default' leaves PCSX2's own
@@ -36,7 +41,15 @@ SPEED_KEYS = {(SPEED_SECTION, 'fastCDVD'), (SPEED_SECTION, 'EECycleRate')}
 # Savestates the mod reads must be Zstandard (2 in every PCSX2 from v2.5.211 to 2.8.x, and the
 # default). PCSX2 2.6 also offers Deflate64 (1) and LZMA2 (3), which the state readers refuse.
 COMPRESSION = ('EmuCore', 'SavestateCompressionType', '2')
-CREATED_SECTIONS = {SPEED_SECTION, COMPRESSION[0]}
+# PCSX2's pause key: 'press Space' prompts and the watcher's automatic pause need it. A profile
+# without it gets it for the session; a player's own binding is never replaced, and no
+# save/load-state key is ever bound (a mid-match state load turns fighter updates off).
+PAUSE_KEY = ('Hotkeys', 'TogglePause', 'Keyboard/Space')
+CREATED_SECTIONS = {SPEED_SECTION, COMPRESSION[0], PAUSE_KEY[0]}
+
+
+class ForeignReceipt(ValueError):
+    """A presentation receipt that names another PCSX2.ini than this install's."""
 
 
 def section_bounds(lines, section=SECTION):
@@ -130,12 +143,69 @@ def atomic_write(path, data):
     write_bytes(path, data)
 
 
+def config_relative(config):
+    """The INI's path inside this install, so the receipt survives a moved folder (L6)."""
+    try:
+        return Path(config).resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def receipt_matches(saved, config, receipt):
+    """Does a receipt belong to `config`? The same absolute path always does. A receipt kept
+    in this install's own analysis folder also does when it names the same INI inside the
+    install, wherever the folder was then (moved, renamed, another drive letter)."""
+    config = Path(config).resolve()
+    if Path(saved['config']).resolve() == config: return True
+    if Path(receipt).resolve().parent != (ROOT/'analysis').resolve(): return False
+    inside = config_relative(config)
+    if inside is None: return False
+    recorded = saved.get('config_relative')
+    if recorded is not None: return recorded == inside
+    tail = Path(inside).parts
+    parts = Path(saved['config']).parts
+    same = (lambda a, b: a.lower() == b.lower()) if os.name == 'nt' else (lambda a, b: a == b)
+    return len(parts) > len(tail) and all(same(a, b) for a, b in zip(parts[-len(tail):], tail))
+
+
+RECEIPT_FOREIGN = 'Presentation receipt belongs to another configuration'
+RECEIPT_UNREADABLE = 'The saved display-settings receipt is unreadable ({detail})'
+RECEIPT_SET_ASIDE = '{problem}; it was kept as {name} and the current display settings are used.'
+
+
+def say(template, **values):
+    """A launch-step line in the player's language (localization.tr); English if that fails."""
+    try:
+        import localization
+        return localization.tr(template, **values)
+    except Exception:  # noqa: BLE001 - a message never stops the launch
+        return template.format(**values)
+
+
+def set_aside(receipt, problem, **values):
+    """Keep a foreign receipt as *.stale-<time>.json and go on: it can never be restored here.
+    `problem` is a RECEIPT_* template; `values` fill it."""
+    import time
+    stale = receipt.with_name(f'{receipt.stem}.stale-{time.strftime("%Y%m%d-%H%M%S")}.json')
+    os.replace(receipt, stale)
+    print('WARNING: '+say(RECEIPT_SET_ASIDE, problem=say(problem, **values), name=stale.name), flush=True)
+
+
 def apply(config=CONFIG, receipt=RECEIPT):
     config, receipt = Path(config), Path(receipt)
-    if receipt.exists(): restore(config, receipt)
+    if receipt.exists():
+        # A receipt that can never be restored here must not stop every later launch (L6).
+        try: restore(config, receipt)
+        except ForeignReceipt: set_aside(receipt, RECEIPT_FOREIGN)
+        except (KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            set_aside(receipt, RECEIPT_UNREADABLE, detail=f'{type(error).__name__}: {error}')
     raw = config.read_bytes(); lines = raw.decode('utf-8-sig').splitlines(keepends=True)
     original = {}
     values=dict(VALUES)
+    import native_map
+    # BT4 changes the disc serial and has no stock GameDB alignment entry. Keep
+    # its manual fixes intact rather than disable them without an automatic replacement.
+    if native_map.ADAPTER == 'bt4-b14-rev2-eng': values.pop('UserHacks', None)
     import mod_settings
     import widescreen_support as wide
     settings=mod_settings.load_settings()
@@ -167,6 +237,11 @@ def apply(config=CONFIG, receipt=RECEIPT):
         prior, wide_extra = collapse(lines,'EnableWideScreenPatches','true','EmuCore')
         extra.append(dict(section='EmuCore',key='EnableWideScreenPatches',prior=prior,applied='true'))
         if wide_extra: duplicates.append(dict(section='EmuCore',key='EnableWideScreenPatches',values=wide_extra))
+    section,key,value=PAUSE_KEY
+    if not any(line.strip() == f'[{section}]' for line in lines) or not entries(lines, key, section):
+        created+=[created_section for created_section in [ensure_section(lines,section)] if created_section]
+        set_value(lines,key,value,section)
+        extra.append(dict(section=section,key=key,prior=None,applied=value))
     speed=[('fastCDVD','true' if settings.get('fast_disc_loading',True) else 'false')]
     rate=CPU_RATES.get(settings.get('emulated_cpu_speed','default'))
     if rate is not None:speed.append(('EECycleRate',rate))
@@ -178,8 +253,14 @@ def apply(config=CONFIG, receipt=RECEIPT):
     # Kept in the launch step's log, so a report shows which emulator speed a session used.
     print('Session emulator speed: '+', '.join(f'{k} = {v}' for k,v in speed)+('' if rate else ', EECycleRate = PCSX2 setting'))
     print(f'Session savestate compression: {COMPRESSION[1]} = {COMPRESSION[2]} (Zstandard)')
-    data = dict(config=str(config.resolve()), values=original, applied=values,extra=extra,
-                utf8_bom=raw.startswith(b'\xef\xbb\xbf'))
+    resolution=entries(lines,'upscale_multiplier')
+    multiplier=resolution[0][1][2] if resolution else 'PCSX2 default'
+    graphics=('Session graphics: automatic hardware fixes; internal resolution = {multiplier}'
+              if 'UserHacks' in values else
+              'Session graphics: existing hardware fix preferences; internal resolution = {multiplier}')
+    print(say(graphics, multiplier=multiplier))
+    data = dict(config=str(config.resolve()), config_relative=config_relative(config), values=original,
+                applied=values,extra=extra,utf8_bom=raw.startswith(b'\xef\xbb\xbf'))
     if created: data['created_sections'] = created
     if duplicates: data['duplicates'] = duplicates
     if startup is not None: data['startup_values'] = startup
@@ -193,8 +274,8 @@ def restore(config=CONFIG, receipt=RECEIPT):
     config, receipt = Path(config), Path(receipt)
     if not receipt.exists(): return False
     saved = read_json(receipt)
-    if Path(saved['config']).resolve() != config.resolve():
-        raise ValueError('Presentation receipt belongs to another configuration')
+    if not receipt_matches(saved, config, receipt):
+        raise ForeignReceipt(RECEIPT_FOREIGN)
     raw = config.read_bytes(); lines = raw.decode('utf-8-sig').splitlines(keepends=True)
     copies = {(item['section'], item['key']): item['values'] for item in saved.get('duplicates', [])}
     for key, value in saved['values'].items():
@@ -204,7 +285,7 @@ def restore(config=CONFIG, receipt=RECEIPT):
         if key!='StartPaused': raise ValueError('Unexpected startup setting in receipt')
         revert(lines, key, 'false', value, copies.get(('UI', key), []), 'UI')
     for item in saved.get('extra',[]):
-        if ((item['section'],item['key']) not in (('EmuCore','EnableWideScreenPatches'),COMPRESSION[:2])
+        if ((item['section'],item['key']) not in (('EmuCore','EnableWideScreenPatches'),COMPRESSION[:2],PAUSE_KEY[:2])
                 and (item['section'],item['key']) not in SPEED_KEYS):
             raise ValueError('Unexpected widescreen setting in receipt')
         revert(lines, item['key'], item['applied'], item['prior'],

@@ -19,7 +19,8 @@ blocks=[dict(address=at,data_hex=data.hex()) for at,data in (
 worker=SimpleNamespace(owned={'stage':dict(blocks=blocks,world={'manager':manager})})
 receipt=capture(worker,source)
 import autopilot
-watcher=SimpleNamespace(reload_worker=worker,playable=source,controller_input=None)
+watcher=autopilot.Autopilot.__new__(autopilot.Autopilot)
+watcher.reload_worker=worker;watcher.playable=source;watcher.controller_input=None
 autopilot.Autopilot.reset_reload_worker(watcher)
 assert watcher.reload_worker is None and watcher.native_reload_hook_receipt==receipt
 baseline=bytearray(0x2FEB18);prepared=bytearray(baseline)

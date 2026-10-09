@@ -65,6 +65,7 @@ USED = {
     'error': CROSS|TRIANGLE,
 }
 ROWS = 7                  # settings per page
+INDEX_VISIBLE = 16        # category index rows between y=70 and the footer; more scroll with arrows
 CHARACTER_ROWS = 13       # characters per exceptions page
 JUMP_PAGES = 5            # L2/R2 on the exceptions list
 REPEAT_DELAY = .4         # seconds a direction is held before it repeats, one step per host poll
@@ -76,6 +77,8 @@ DEPENDS = {
     'lockoff_button': ('lockoff_enabled', True),
     'lockoff_hold_seconds': ('lockoff_enabled', True),
     'lockoff_target_hud': ('lockoff_enabled', True),
+    'lockon_right_stick_mode': ('lockon_right_stick', True),
+    'lockon_target_style': ('lockon_target_marker', True),
     'show_fusion_control_owner': ('coop_fusion_controls', 'swap_20s'),
     'show_fusion_control_countdown': ('coop_fusion_controls', 'swap_20s'),
     'fusion_duration_seconds': ('fusion_duration_enabled', True),
@@ -100,8 +103,34 @@ DEPENDS = {
     'revive_ring_opacity': ('show_revive_ring', True),
     'revive_ring_wave_height': ('show_revive_ring', True),
     'revive_ring_wave_speed': ('show_revive_ring', True),
+    # Outnumbered: the value rows serve only the Custom preset.
+    'outnumbered_damage_bonus_percent': ('outnumbered_preset', 'custom'),
+    'outnumbered_damage_reduction_percent': ('outnumbered_preset', 'custom'),
+    'outnumbered_recovery_speed_percent': ('outnumbered_preset', 'custom'),
+    'outnumbered_getup_protection_seconds': ('outnumbered_preset', 'custom'),
+    'outnumbered_combo_breaker_hits': ('outnumbered_preset', 'custom'),
     'training_health_delay_seconds': ('training_refill_health', True),
+    'beam_struggle_damage_penalty_percent': ('beam_struggle_interference', True),
+    'beam_assist_multiplier_percent': ('beam_assist_enabled', True),
+    'beam_assist_cpu': ('beam_assist_enabled', True),
+    'beam_assist_range': ('beam_assist_enabled', True),
+    'ground_motion_style': ('ground_running', True),
+    'ground_walk_tilt_percent': ('ground_running', True),
+    'ground_walk_speed_percent': ('ground_running', True),
+    'ground_run_speed_percent': ('ground_running', True),
+    'ground_size_speed': ('ground_running', True),
 }
+# Display only, like DEPENDS: a row is also dimmed while other settings all hold values that disable it.
+DIMMED_BY = {
+    # Outnumbered: who is helped matters for every preset except Off.
+    'outnumbered_scope': (('outnumbered_preset', 'off'),),
+    'outnumbered_applies_to': (('outnumbered_preset', 'off'),),
+    # R3 is the right stick's own click: it cannot be held while flicking. The stick alone still aims with R3.
+    'lockon_right_stick': (('lockon_switch_button', 'r3'), ('lockon_right_stick_mode', 'with_switch_button')),
+}
+# Display only, like DEPENDS: a button row is also dimmed while it equals another button that takes precedence (the
+# match then installs nothing for it): (other key, None or the (switch, value) under which the other counts).
+CONFLICTS = {}
 # Circle help for the two rows after the categories: (help heading, text).
 ROW_HELP = {
     'exceptions': ('CPU transformation exceptions',
@@ -272,6 +301,11 @@ class Controller:
 
     def dimmed(self, key, values=None):
         values = self.values if values is None else values
+        if key in DIMMED_BY and all(values.get(other) == value for other, value in DIMMED_BY[key]):
+            return True
+        for other, condition in CONFLICTS.get(key, ()):
+            if values.get(key) == values.get(other) and (condition is None or values.get(condition[0]) == condition[1]):
+                return True
         seen = set()
         while key in DEPENDS and key not in seen:
             seen.add(key); master, wanted = DEPENDS[key]
@@ -337,8 +371,12 @@ class Controller:
         count = len(self.overrides())
         rows = [self.tr(group) for group in self.groups]
         rows += [self.tr('Per-character exceptions ({n} set)…', n=count), self.tr('Restore defaults…')]
-        for i, text in enumerate(rows):
-            y = 70+i*18+(6 if i >= len(self.groups) else 0)
+        # Windowed index: identical with INDEX_VISIBLE rows or fewer, otherwise the window follows the selection.
+        first = 0 if len(rows) <= INDEX_VISIBLE else min(max(0, self.index_row-INDEX_VISIBLE+1), len(rows)-INDEX_VISIBLE)
+        if len(rows) > INDEX_VISIBLE and self.index_row < first: first = self.index_row
+        for slot, i in enumerate(range(first, min(len(rows), first+INDEX_VISIBLE))):
+            text = rows[i]
+            y = 70+slot*18+(6 if (i >= len(self.groups) and first <= len(self.groups)) else 0)
             if i == self.index_row:
                 c.draw.rectangle((15, y-2, 497, y+15), fill=PANEL, outline=OUTLINE)
             if i < len(self.groups):
@@ -348,6 +386,9 @@ class Controller:
             if mark:
                 self._marker(c, y-1)
             c.text((24, y), text, 12, True, LABEL, limit=440)
+        if len(rows) > INDEX_VISIBLE:
+            if first > 0: c.draw.polygon(((490, 62), (496, 68), (484, 68)), fill=FOOTER)
+            if first+INDEX_VISIBLE < len(rows): c.draw.polygon(((484, 356), (496, 356), (490, 362)), fill=FOOTER)
         self._footer(c, self.tr('Up/Down: select    Cross: open    Circle: help'),
                      self.tr('Square: save and exit    Triangle: close'))
 

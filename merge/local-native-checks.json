@@ -1,0 +1,106 @@
+[
+  {
+    "test": "codex_check_rematch_poll.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-01.log"
+  },
+  {
+    "test": "codex_check_bulk_snapshot.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-02.log"
+  },
+  {
+    "test": "codex_check_preparation_timing.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-03.log"
+  },
+  {
+    "test": "codex_check_native_seat_python.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-04.log"
+  },
+  {
+    "test": "codex_check_native_seat_python.py",
+    "args": [
+      "--roster"
+    ],
+    "exit": 0,
+    "log": "check-05.log"
+  },
+  {
+    "test": "codex_check_super_recipe_emitted.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-06.log"
+  },
+  {
+    "test": "codex_check_fusion_receipts.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-07.log"
+  },
+  {
+    "test": "codex_check_cpu_fusion_choice.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-08.log"
+  },
+  {
+    "test": "codex_check_failed_preparation.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-09.log"
+  },
+  {
+    "test": "codex_check_reload_hook_receipt.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-10.log"
+  },
+  {
+    "test": "codex_check_coop_rematch_ownership.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-11.log"
+  },
+  {
+    "test": "codex_check_quad_rematch_cleanup.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-12.log"
+  },
+  {
+    "test": "codex_check_quad_rematch_cleanup.py",
+    "args": [
+      "--cpu-tactics"
+    ],
+    "exit": 0,
+    "log": "check-13.log"
+  },
+  {
+    "test": "codex_check_quad_rematch_cleanup.py",
+    "args": [
+      "--fusion-form"
+    ],
+    "exit": 0,
+    "log": "check-14.log"
+  },
+  {
+    "test": "codex_check_v11_native_integration.py",
+    "args": [],
+    "exit": 0,
+    "log": "check-15.log"
+  },
+  {
+    "test": "codex_check_v11_native_integration.py",
+    "args": [
+      "--roster"
+    ],
+    "exit": 0,
+    "log": "check-16.log"
+  }
+]

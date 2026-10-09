@@ -25,11 +25,38 @@ ALLOC_SIZE, COLLISION_OFF, SHADER_OFF, FX_OFF = 0x30000, 0x1C800, 0x20000, 0x221
 FIELDS = dict(enabled=0,status=4,manager=8,actor=12,old_model=16,old_model_id=20,
               old_resource=24,new_resource=28,new_handle=32,allocation=36,
               model_id=40,model=44,pending=48,shader=52,packet0=56,packet1=60,
-              collision=64,shader_node=68,fx_node=72,dataset=76)
+              collision=64,shader_node=68,fx_node=72,dataset=76,
+              repaired_groups=80,texture_group=84,staged_group=88)
+# Native texture groups 0..14: a bare bit mask at pool+GROUP_MASK, no owner, no count.
+GROUPS, GROUP_MASK = 15, 439156
 
 
 def require(value, why):
     if not value: raise ValueError(why)
+
+
+def texture_groups(ram):
+    """The native group mask, the groups live registered models draw from, and the group staging takes.
+
+    A model created from an already initialised geometry header re-reserves the group that header remembers
+    without checking it (1132F8 re-init path, 249000 result ignored), and every model destructor (1135F0)
+    clears its group bit even while another model still uses that number. A destroyed type-1 effect model
+    therefore keeps "its" group in its persistent header; once a reload has given that number to a fighter,
+    the effect's next use frees it under the fighter and the next staging is handed the fighter's own group
+    (TTM-MATCH-08). The staging payload re-marks every live model's group and takes the highest free one,
+    away from the lowest-first groups native transients initialise into; this host view predicts it exactly.
+    """
+    u=lambda p:struct.unpack_from('<I',ram,p)[0]
+    mask=u(u(prior.REGISTRY_GLOBAL)+GROUP_MASK);live=0
+    for mid in range(12):
+        model=u(prior.core.MODELS+4*mid)
+        if not (0x100000<=model<=len(ram)-0x1670 and model%4==0) or u(model+4)!=1:continue
+        geometry=u(model+64)
+        if not (0x100000<=geometry<=len(ram)-64 and geometry%4==0):continue
+        if u(geometry+40)<GROUPS:live|=1<<u(geometry+40)
+    full=(1<<GROUPS)-1;used=(mask|live)&full;free=full&~used
+    return dict(mask=mask,live=live,used=used,repaired=live&~mask&full,
+                group=free.bit_length()-1 if free else None)
 
 
 def resource_info(ram, resource, handle, character, costume, damaged):
@@ -61,7 +88,37 @@ def extension_code(world, occupied):
     return a.finish()
 
 
+def group_choice(a,row):
+    """Before any allocation: re-mark every live model's group, pick the highest free one (else 122).
+
+    Mirrors texture_groups(). Uses t0-t7 only; the repaired bits and the choice go to CONTROL+80/+84.
+    """
+    a.li(8,row['pool']+GROUP_MASK);a.lw(9,8);a.move(10,9)
+    a.li(11,prior.core.MODELS);a.addiu(12,11,48)
+    a.label('group_scan');a.lw(13,11)
+    a.li(14,0x100000);a.r(0x2B,14,13,14);a.branch(5,14,0,'group_next')
+    a.li(14,0x8000000-0x1670);a.r(0x2B,14,14,13);a.branch(5,14,0,'group_next')
+    a.i(12,14,13,3);a.branch(5,14,0,'group_next')
+    a.lw(14,13,4);a.addiu(15,0,1);a.branch(5,14,15,'group_next')
+    a.lw(14,13,64)
+    a.li(15,0x100000);a.r(0x2B,15,14,15);a.branch(5,15,0,'group_next')
+    a.li(15,0x8000000-64);a.r(0x2B,15,15,14);a.branch(5,15,0,'group_next')
+    a.i(12,15,14,3);a.branch(5,15,0,'group_next')
+    a.lw(14,14,40);a.i(11,15,14,GROUPS);a.branch(4,15,0,'group_next')
+    a.addiu(15,0,1);a.r(4,15,14,15);a.r(0x25,10,10,15)
+    a.label('group_next');a.addiu(11,11,4);a.branch(5,11,12,'group_scan')
+    a.sw(10,8)
+    a.r(0x27,13,9,0);a.r(0x24,13,13,10);a.sw(13,16,80)
+    a.r(0x27,13,10,0);a.i(12,13,13,(1<<GROUPS)-1);a.branch(4,13,0,'error122')
+    a.addiu(14,0,GROUPS-1);a.addiu(15,0,1<<(GROUPS-1))
+    a.label('group_pick');a.r(0x24,12,13,15);a.branch(5,12,0,'group_picked')
+    a.addiu(14,14,-1);a.r(2,15,0,15,1);a.jump('group_pick')
+    a.label('group_picked');a.sw(14,16,84)
+
+
 def payload(world,row,occupied,quiet=False,allow_forms=False,quiet_guard=None):
+    # A resident copy (Body Change) re-creates an initialised header that keeps its group on purpose.
+    fresh=not row.get('geometry_initialized')
     a=Assembler(ENTRY);a.addiu(29,29,-0x80)
     for i,r in enumerate(tuple(range(16,24))+(31,)):a.i(63,r,29,i*8)
     for i in range(4):a.i(57,20+i,29,0x60+i*4)
@@ -92,6 +149,7 @@ def payload(world,row,occupied,quiet=False,allow_forms=False,quiet_guard=None):
     a.li(8,row['pool']+397320);a.lw(8,8);a.li(9,row['draw_nodes'])
     a.r(0x2B,8,8,9);a.branch(5,8,0,'error120')
     a.li(8,row['pool']+69128);a.lw(8,8);a.branch(4,8,0,'error120')
+    if fresh:group_choice(a,row)
     a.addiu(8,0,1);a.sw(8,16,4)
     a.li(4,ALLOC_SIZE);a.addiu(5,0,64);a.move(6,0);a.addiu(7,0,1)
     a.call(A(0x2554D8));a.branch(4,2,0,'error130');a.move(18,2);a.sw(18,16,36)
@@ -108,8 +166,15 @@ def payload(world,row,occupied,quiet=False,allow_forms=False,quiet_guard=None):
     a.li(20,row['collision']);a.li(8,COLLISION_OFF);a.r(0x21,21,18,8);a.sw(21,16,64)
     copy_words(a,'backup_collision',20,21,row['collision_size'])
     a.addiu(8,0,1);a.sw(8,16,48)
+    if fresh:
+        # The first-init allocator (249098) takes the lowest free group: for this one native call every
+        # other free group is marked (s1 keeps exactly those bits), so it can only take the chosen one.
+        a.li(8,row['pool']+GROUP_MASK);a.lw(9,8);a.lw(10,16,84);a.addiu(11,0,1);a.r(4,11,10,11)
+        a.r(0x27,17,9,11);a.i(12,17,17,(1<<GROUPS)-1);a.r(0x25,9,9,17);a.sw(9,8)
     a.move(4,0);a.li(5,row['resource']);a.move(6,0);a.call(A(0x249AB8))
     a.move(22,2);a.sw(0,16,48)
+    if fresh:
+        a.li(8,row['pool']+GROUP_MASK);a.lw(9,8);a.r(0x27,10,17,0);a.r(0x24,9,9,10);a.sw(9,8)
     copy_words(a,'restore_collision',21,20,row['collision_size'])
     a.i(11,8,22,12);a.branch(4,8,0,'error140')
     for mid in occupied:
@@ -122,6 +187,7 @@ def payload(world,row,occupied,quiet=False,allow_forms=False,quiet_guard=None):
         elif value=='allocation':a.move(9,18)
         else:a.li(9,value)
         a.branch(5,8,9,'error142')
+    if fresh:a.li(8,row['geometry']+40);a.lw(8,8);a.sw(8,16,88)
     a.sw(21,19,84);a.move(4,19);a.call(A(0x24DB28))
     for field,control in ((5736,68),(5732,72)):
         a.lw(8,19,field);a.lw(9,16,control);a.branch(5,8,9,'error143')
@@ -130,7 +196,7 @@ def payload(world,row,occupied,quiet=False,allow_forms=False,quiet_guard=None):
     for function in (A(0x24C958),A(0x24CC88),A(0x24E3F8)):a.move(4,19);a.call(function)
     a.lw(8,19,2356);a.branch(4,8,0,'error144');a.sw(8,16,76)
     a.sw(0,19,8);a.addiu(8,0,5);a.sw(8,16,4);a.jump('done')
-    for error in (110,120,130,131,140,141,142,143,144):
+    for error in (110,120)+((122,) if fresh else ())+(130,131,140,141,142,143,144):
         a.label(f'error{error}');a.addiu(8,0,error);a.sw(8,16,4);a.sw(0,16,48);a.jump('done')
     a.label('done');a.lw(2,16,4)
     for i in range(4):a.i(49,20+i,29,0x60+i*4)
@@ -181,7 +247,7 @@ def build_memory(ram,source='<offline-memory>',quiet=False,allow_forms=False):
     occupied=[i for i in range(12) if u(prior.core.MODELS+i*4) and u(u(prior.core.MODELS+i*4)+4)]
     require(len(occupied)<12,'No spare staging model slot')
     pool=row['pool'];require(u(pool+397320)>=row['draw_nodes'] and u(pool+69128)>0,'Insufficient staging model/draw capacity')
-    require((u(pool+439156)&0x7FFF).bit_count()<15,'No spare texture group')
+    groups=texture_groups(ram);require(groups['group'] is not None,'No spare texture group')
     require(not row['geometry_initialized'],'Staging requires a fresh independently loaded mesh')
     require(not any(ram[ENTRY:END]),'Reload staging reservation occupied')
     original=bytes(ram[creator.EXT_ENTRY:creator.EXT_ENTRY+8])
@@ -199,7 +265,7 @@ def build_memory(ram,source='<offline-memory>',quiet=False,allow_forms=False):
     pieces=[(ENTRY,payload(world,row,occupied,quiet,allow_forms)),(EXTENSION,extension_code(world,occupied)),
             (OLD_EXTENSION,original),(CONTROL,bytes(control)),
             (creator.EXT_ENTRY,struct.pack('<2I',(2<<26)|(EXTENSION>>2),0))]
-    return dict(serial=SERIAL,crc=CRC,source=str(source),world=world,resource=row,
+    return dict(serial=SERIAL,crc=CRC,source=str(source),world=world,resource=row,texture_groups=groups,
         occupied_model_ids=occupied,entry=ENTRY,control=CONTROL,fields=FIELDS,quiet=quiet,
         status='DORMANT HIDDEN REPLACEMENT STAGE; NO ACTOR COMMIT',
         blocks=[dict(address=p,expected_hex=ram[p:p+len(d)].hex(),data_hex=d.hex()) for p,d in pieces],

@@ -13,6 +13,7 @@ against its own pair-local target, setting the flag on that attacker only.
 Offline builder only.
 """
 from native_map import A, CRC, SERIAL, elf_path
+from native_map import FLAG as NATIVE_FLAG
 import argparse
 import json
 import struct
@@ -25,7 +26,7 @@ from battle_mode_policy import ACTOR_COUNTS
 HOOK = A(0x1DAE98)
 CLEAR_FLAG, SET_FLAG, BONE_POSITION, SEGMENT, RAYCAST = A(0x1DAA50), A(0x1DA9D0), A(0x2058E0), A(0x2398F0), A(0x1B2DF0)
 CODE, TAIL, CONTROL = 0x073CF000, 0x073CF400, 0x073CF800
-FLAG, BONE = 0xBA, 47
+FLAG, BONE = NATIVE_FLAG(0xBA), 47
 FIELDS = dict(enabled=0, manager=4, frames=8, blocked=16)  # blocked: twelve per-actor counters
 POINTERS = core.POINTERS
 SAVED = ((16, 0x40), (17, 0x48), (18, 0x50), (19, 0x58), (20, 0x60), (31, 0x68))

@@ -16,13 +16,16 @@ from pathlib import Path
 import atomic_files
 import input_binding
 import feature_preferences
-from native_map import ACTOR_HZ
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / 'mod-settings.json'
 # Written once by the player installer (player-defaults.json, validated, without
-# language). Restore defaults uses it; developer trees fall back to DEFAULTS.
+# language). Restore defaults uses it (defaults_path); a developer tree has none.
 DEFAULTS_PATH = ROOT / 'mod-settings-defaults.json'
+# The installer's source of those defaults. A developer tree (no player-install.json) has no installer copy, so it
+# reads this file in place: its Play, Mod settings and Restore defaults then use what a new installation writes.
+# Only the code DEFAULTS below stay legacy-leaning: tests, goldens and the legacy property build from them.
+SHIPPED_DEFAULTS = ROOT.parent / 'player-installer' / 'player-defaults.json'
 # Adapter facts. The BT4 port differs only here: 'BT4' and range(250).
 ADAPTER = 'BT3'
 NPC_OVERRIDE_IDS = range(161)
@@ -65,7 +68,22 @@ REVIVE_CHANNEL_KEY = 'revive_channel_seconds'
 REVIVE_KEYS = (REVIVE_KEY, REVIVE_COST_KEY, REVIVE_CHANNEL_KEY, 'revive_radius', 'revive_health_bars',
                'revive_recovery_seconds', CORPSE_SAFETY_KEY, 'show_revive_ring', 'revive_ring_opacity',
                'revive_ring_wave_height', 'revive_ring_wave_speed')
+# Every key of the Outnumbered page (outnumbered.py SETTING_KEYS), in display order.
+OUTNUMBERED_KEYS = ('outnumbered_preset', 'outnumbered_scope', 'outnumbered_applies_to',
+                    'outnumbered_damage_bonus_percent', 'outnumbered_damage_reduction_percent',
+                    'outnumbered_recovery_speed_percent', 'outnumbered_getup_protection_seconds',
+                    'outnumbered_combo_breaker_hits')
+# beta.37's tag attacks were removed in beta.38: their saved keys are dropped on load.
+RETIRED_TAG_KEYS = ('tag_attacks_enabled', 'tag_attack_button', 'tag_attack_helpers', 'tag_attack_cost',
+                    'tag_super_enabled', 'tag_super_cost', 'tag_attack_cooldown_seconds')
 DISPLAY_KEYS = (FRIEND_BARS_KEY, ENEMY_BARS_KEY, NATIVE_HUD_KEY, KILL_FEED_KEY, KILL_SCORE_KEY)
+# Every key of the Beam struggles page (beam_struggle.py), in display order.
+BEAM_KEYS = ('beam_clash_camera', 'beam_struggle_length', 'beam_struggle_push_ahead', 'beam_struggle_cpu_power_percent',
+             'beam_struggle_interference', 'beam_struggle_damage_penalty_percent',
+             'beam_assist_enabled', 'beam_assist_multiplier_percent', 'beam_assist_cpu', 'beam_assist_range')
+# Every key of the Movement page (ground_locomotion.py), in display order.
+MOVEMENT_KEYS = ('ground_running', 'ground_motion_style', 'ground_walk_tilt_percent', 'ground_walk_speed_percent', 'ground_run_speed_percent',
+                 'ground_size_speed')
 DEFAULTS = {'version': VERSION, MODE_KEY: 'all', ULTIMATE_KEY: False,
             TRANSFORMATION_KEY: False, TRANSFORM_VIEW_KEY: 'shared',
             COOP_FUSION_KEY: 'swap_20s', LOCKON_KEY: 'r3', LOCKON_HOLD_KEY: 0.5,
@@ -83,10 +101,14 @@ GROUPS = (
                'loading_animation_speed_percent', 'native_mode_cover')),
     ('Character select', ('coop_independent_selection', 'all_controllers_character_select',
                           'show_player_slot_labels')),
-    ('Controls', (LOCKON_KEY, LOCKON_HOLD_KEY, 'lockoff_enabled', 'lockoff_button', 'lockoff_hold_seconds')),
+    ('Controls', (LOCKON_KEY, LOCKON_HOLD_KEY, 'lockoff_enabled', 'lockoff_button', 'lockoff_hold_seconds',
+                  'lockon_right_stick', 'lockon_right_stick_mode', 'lockon_cycle_order', 'lockon_attacker_switch',
+                  'lockon_after_ko')),
+    ('Movement', MOVEMENT_KEYS),
     ('Cinematics', (MODE_KEY, ULTIMATE_KEY, TRANSFORMATION_KEY, TRANSFORM_VIEW_KEY, 'rush_cinematics',
-                    'extra_character_intros')),
-    ('Fusion', (COOP_FUSION_KEY, 'coop_fusion_swap_seconds', 'show_fuse_prompt', 'show_fusion_control_owner', 'show_fusion_control_countdown',
+                    'prevent_cinematic_recentering', 'extra_character_intros', 'battle_camera_distance_percent')),
+    ('Battle rules', ('tournament_ring_outs',)),
+    ('Fusion', ('fusion_enabled', COOP_FUSION_KEY, 'coop_fusion_swap_seconds', 'show_fuse_prompt', 'show_fusion_control_owner', 'show_fusion_control_countdown',
                 'fusion_duration_enabled', 'fusion_duration_seconds', 'fusion_time_by_form', 'fusion_form_penalty', 'show_fusion_timer',
                 'fusion_defusion_animation')),
     ('CPU tactics', ('cpu_transform_allies', 'cpu_transform_enemies', 'cpu_tactics_preset')),
@@ -95,13 +117,15 @@ GROUPS = (
     ('Giants', ('canonical_giants', 'giant_size_multiplier', 'giant_attack_speed_percent', 'giant_damage_percent',
                 'giant_armor_levels', 'giant_camera_distance_percent')),
     ('HUD', ('hud_style','hud_overhead_shape','hud_overhead_names','hud_overhead_ki_pips','hud_overhead_detail','hud_overhead_portraits',
-             'hud_panel_scale_percent','hud_panel_opacity_percent','hud_contestant_list',*DISPLAY_KEYS, 'lockoff_target_hud')),
+             'hud_panel_scale_percent','hud_panel_opacity_percent','hud_contestant_list',*DISPLAY_KEYS, 'lockoff_target_hud', 'lockon_target_marker', 'lockon_target_style', 'lockon_threat_marks')),
     ('Split-screen HUD', ('split_hud_style', 'split_hud_scale_percent', 'split_hud_layout', 'split_hud_filter',
                           'coop_hud_layout', 'show_hud_portraits', 'show_hud_sparking_effects',
                           'hud_damage_trail_seconds')),
     ('Spectating', ('spectator_takeover_enabled', 'spectate_fallen_fighters', 'show_takeover_hints',
                     'show_takeover_confirmation', 'takeover_hint_seconds', 'takeover_confirmation_seconds')),
     ('Revival', REVIVE_KEYS),
+    ('Outnumbered', OUTNUMBERED_KEYS),
+    ('Beam struggles', BEAM_KEYS),
     ('Training', ('training_cpu_behavior', 'training_refill_health', 'training_health_delay_seconds',
                   'training_refill_ki', 'training_refill_stocks')),
     ('Launch options (restart)', ('widescreen_patch', 'fast_disc_loading', 'emulated_cpu_speed', 'expanded_maps')),
@@ -109,6 +133,9 @@ GROUPS = (
 )
 # The page that also offers the per-character CPU transformation exceptions.
 EXCEPTIONS_GROUP = 'Fighters'
+# Pages only the desktop window has, after GROUPS: 'Game disc' chooses the ISO Play starts (disc_page.py). The
+# in-game settings screens (ui_groups) never show them.
+DESKTOP_PAGES = ('Game disc',)
 # Turning these on is checked first (can_enable).
 CHECKED_ENABLES = ('expanded_maps',)
 WINDOW_TITLE = '{adapter} mod settings'
@@ -120,16 +147,20 @@ HEADER = ('Choose a category. Saved changes apply to the next match unless its p
 notes = {
     'Menus': 'Press the menu switch button on the original main menu to open or close the mod menus; its hint can be hidden. With mod mode menus off, only Mod settings.cmd can turn them back on. Menu settings saved in game apply when you leave Mod Settings; saved in Mod settings.cmd, after restarting Play. Language also changes match text from the next match. Loading speed applies from the next loading screen.',
     'Character select': 'With own fighters on, each human picks the slots assigned to them with their own controller; otherwise Player 1 picks. Allowing all controllers lets any controller move the cursor. Player numbers mark whose slot is whose. Saved in game, these apply when you leave Mod Settings; saved in Mod settings.cmd, after restarting Play.',
-    'Controls': "Switch target on release (0 = tap). Hold to lock off; a shared button's lock-off time is extended if needed. Tap again to target the enemy nearest your camera centre; no visible enemy leaves you unlocked. Buttons retain native actions (R3 transforms, Start pauses). Rebind in Mod settings.cmd. Applies next match; Fight Again keeps the match settings.",
-    'Cinematics': 'Special-move pause chooses who stops during a special. Shared cameras pause everyone for one view; off keeps separate views and lets others move (paired attacks still hold their fighters). Split-screen transformations use one shared view or frame each half. Extra fighter intros follow the two leads and can be skipped. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
-    'Fusion': 'P1 and P2 mean the first and second fuser, for any seat pair. Swap control or movement/attack roles at the chosen interval; the first swap starts one full interval after fusion. Timers pause with battle pauses and cinematics. Applies next match; Fight Again keeps the match settings. Form drain affects timed Dance fusions only: Normal reduces full-form duration by 10/20/30/40/50%, Mild by 5/10/15/20/25%, Heavy by 20/35/50/60/70%. Changing forms changes future drain without resetting spent time; a completed transformation grants at least one combat second. Enable fusion duration as well. Unknown forms use base drain.',
+    'Controls': 'Tap the switch button: next enemy in the set order; during an attack warning, your attacker (or automatically when hit, if set). Right stick, with the button held (not R3) or alone if set (locked on in combat; no camera then): left/right steps around you, up/down picks above/below. Hold the button to lock off; tap to relock. R3 transforms. Rebind in Mod settings.cmd. Applies next match; Fight Again keeps it.',
+    'Movement': 'On the ground, fighters walk or run instead of gliding; dashes, jumps and flight stay unchanged. Classic keeps the previous animation. Natural is relaxed; Fighter has a more athletic stride. Tilt the left stick past the threshold to run; CPU fighters run. Speed and fighter size adjust the stride. Applies from the next match; Fight Again keeps the settings of its match.',
+    'Cinematics': 'Special-move pause chooses who stops. Shared cameras pause everyone outside the scene for one view; off keeps separate views (paired attacks still hold their fighters). Split-screen transformations use one view or each half. Extra intros can be skipped. Zoom-out above 100% pulls the camera back. Kept in place, attacks and transformations play where they start, not at the arena centre. Applies next match; Fight Again keeps it.',
+    'Battle rules': 'Tournament ring-outs use the original stage ground-contact rules. Flying outside the ring is safe until you touch a disallowed surface. Ringed-out fighters cannot be revived; their teammates keep fighting. Defeated humans can still take over a living CPU teammate when takeover is enabled. Turn this off to fight without ring-outs. Applies from the next match; Fight Again keeps the settings of its match.',
+    'Fusion': 'Allow fusions controls new fusions for humans and CPUs; preselected fused characters are unaffected. P1 and P2 mean the first and second fuser, for any seat pair. Swap control or movement/attack roles at the chosen interval; the first swap starts one full interval after fusion. Timers pause with battle pauses and cinematics. Applies next match; Fight Again keeps the match settings. Form drain affects timed Dance fusions only: Normal reduces full-form duration by 10/20/30/40/50%, Mild by 5/10/15/20/25%, Heavy by 20/35/50/60/70%. Changing forms changes future drain without resetting spent time; a completed transformation grants at least one combat second. Enable fusion duration as well. Unknown forms use base drain.',
     'Fighters': 'Ginyu can exchange bodies with the opponent he actually hits; stolen-body abilities are optional. Extra voices borrow idle native voice streams. The CPU switches and chance limit native CPU transformations; per-character exceptions override them. Humans, fusion and Body Change are unaffected. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
-    'Giants': 'Larger giants scale native giant forms; expanded maps give them room. Size, attack speed, damage, stagger resistance and camera distance apply only while larger giants are on. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
-    'HUD': 'Overhead health bars, the battle HUD, the kill feed and the watched fighter kill count are separate switches. Turning the battle HUD off also hides the split-screen panels. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
+    'Giants': 'Larger giants scale native giant forms; expanded maps give them room. Size, attack speed, damage, stagger resistance and camera distance apply only while larger giants are on; the Cinematics zoom-out multiplies that distance up to a fixed limit. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
+    'HUD': 'Health bars, battle HUD, kill feed, watched fighter kill count, target indicator and attacker arrows are separate switches. Battle HUD off also hides split-screen panels. The indicator is a gold arrow, a ring sized to your target, or both, in every view. Red arrows point at each enemy locked on to you, on the screen edge if off screen; they flash while it attacks. Applies next match; Fight Again keeps it.',
     'Split-screen HUD': 'Native style uses the game frames and meters; portraits and lightning need it. "Same top row" holds both panels (size in %); "Player top, target bottom" puts your target opposite you. Co-op panels show both players or each player and target. Smooth filtering softens textures. The damage trail briefly shows lost health (0 = off). Applies from the next match; a Fight Again rematch keeps the settings of its match.',
     'Spectating': 'A defeated human can watch fighters and take over a living CPU teammate, never an enemy, and not in free-for-all or CPU-only matches. Fallen fighters can be watched for their score. The hint shows the takeover button after its delay; the confirmation names your new fighter. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
     'Revival': 'Stay inside the circle of a fallen teammate for the set time. Moving and taunting keep progress; damage or leaving interrupts. Revival costs blast stocks, not ki, and restores the set health. Get-up protection, corpse safety and ring appearance are adjustable. No revival in free-for-all. Applies from the next match; a Fight Again rematch keeps its settings.',
     'CPU tactics': 'CPU transformations use native stock costs, character exceptions, giant restrictions and chance limits. Allies means the first player team; free-for-all CPUs are enemies. Native leaves the existing AI unchanged. When outmatched considers health, ki, recent damage and reviewed form tiers; unknown tiers add no score. Presets tune thresholds and cooldowns. Applies next match; Training keeps its own CPU behavior. CPU revival and autonomous fusion are not included yet.',
+    'Outnumbered': 'For a fighter on the smaller team or, if chosen, one targeted by two or more enemies. Damage follows the living team sizes: per extra enemy each of you faces, you deal more and take less (at most 300% dealt, at least 40% taken); equal teams and free-for-all keep normal damage. Recovery speed shortens knock-backs, get-ups and hit reactions. Protection: while you get up, ordinary hits neither stagger nor hurt you; Blast 2 attacks, rushes and throws still do. The combo breaker gives 1 s of it, at most every 5 s, never during a rush or throw. Balanced: +15%/-10%, 150%, 0.5 s, 12 hits. Strong: +40%/-30%, 200%, 1 s, 8 hits. Custom uses the rows below; the two rows about who is helped apply to every preset. The "Enemies targeting you" marks are on the HUD page. Applies from the next match; a Fight Again rematch keeps its settings.',
+    'Beam struggles': "Clash camera: switch to the struggle, or keep every view on its own player. Long struggles last 2x or 4x; a set input lead wins at once. CPU strength scales CPU inputs. With hits on, enemies can hit both fighters (no grabs) and lost health weakens their push. Near a struggling ally, press R3 (1 blast stock): you fly in beside them and join, adding push and final damage. Up to four per side (x3 at most). Applies next match; Fight Again keeps it.",
     'Training': 'Modded Training takes one to four players; share a team to practice together. The CPU stands still or fights back. Health refills after the delay, and ki and blast stocks refill. With health refill off, defeats can end the session. Native Training stays in the original menu. Applies from the next session; a Fight Again rematch keeps the settings of its session.',
     'Launch options (restart)': 'Applied when Play starts, so restart Play after saving. Widescreen enables the PCSX2 16:9 patch. Fast disc loading shortens loading screens. A faster emulated CPU smooths split screen; PCSX2 setting leaves the rate alone. 2x maps need Build expanded maps.cmd first (seven animated stages stay native); without that build, Play starts the original ISO.',
     'Diagnostics': 'For troubleshooting; these files can be large. Preparation dumps keep intermediate RAM images, freeze snapshots save memory when a match stops responding, and battle history records match events. Applies from the next match; a Fight Again rematch keeps the settings of its match.',
@@ -148,7 +179,9 @@ def _json_value(value):
     return False
 
 
-def validate_settings(settings):
+def validate_settings(settings, defaults=None):
+    """The checked settings. `defaults` (developer_defaults(): the installer's values) fills the editable keys the
+    saved file lacks, after the presence-based migrations below; without it the code DEFAULTS fill them."""
     if type(settings) is not dict or not _json_value(settings):
         raise ValueError('Mod settings must be a JSON object with finite JSON values.')
     result = copy.deepcopy(settings)
@@ -167,10 +200,21 @@ def validate_settings(settings):
     result.pop('krillin_scattering_all_enemies', None)
     result.pop('menu_transition_cover', None)
     result.pop('fusion_lore_timers', None)  # Only Fusion Dance fusions are timed.
+    # beta.38 removed beam struggle and ultimate splash damage; older saved files may still name its options.
+    for key in ('beam_clash_splash', 'ultimate_splash', 'splash_damage_percent', 'splash_radius',
+                'splash_friendly_fire'):
+        result.pop(key, None)
+    for key in RETIRED_TAG_KEYS:
+        result.pop(key, None)
     # The pre-layout release enlarged the four panels to120%. Adopt the new
     # requested100% layout once; subsequent explicit sizes remain user choices.
     if 'split_hud_layout' not in result and result.get('split_hud_scale_percent') == 120:
         result['split_hud_scale_percent'] = 100
+    # Never the language or the file version; a version-1 file keeps its legacy pause Boolean (no pause mode).
+    legacy = PAUSE_KEY in result or result.get('version') == 1
+    for key, value in (defaults or {}).items():
+        if key in DEFAULTS and key not in ('version', LANGUAGE_KEY) and not (legacy and key == MODE_KEY):
+            result.setdefault(key, copy.deepcopy(value))
     feature_preferences.validate_into(result)
     version = result.get('version', 1 if PAUSE_KEY in result else VERSION)
     if type(version) is not int or version not in (1, VERSION):
@@ -207,8 +251,11 @@ def validate_settings(settings):
     duration=result[LOCKON_HOLD_KEY]
     if type(duration) not in (int,float) or not math.isfinite(duration) or not 0<=duration<=3600:
         raise ValueError('Target-switch hold time must be between 0 (tap) and 3600 seconds.')
+    # Compare at both game-logic rates, 30 Hz (USA) and 25 Hz (European disc): lockoff_target and
+    # lockon_updates round each hold up to whole updates of the selected disc, so a pair that is distinct
+    # at one rate can round to the same update count at the other.
     if (result['lockoff_enabled'] and result['lockoff_button']==result[LOCKON_KEY]
-            and math.ceil(result['lockoff_hold_seconds']*30)<=max(1,math.ceil(duration*30))):
+            and any(math.ceil(result['lockoff_hold_seconds']*hz)<=max(1,math.ceil(duration*hz)) for hz in (25,30))):
         if duration>3599.5:
             raise ValueError('With the same button, lock-off hold time must be longer than target-switch hold time.')
         result['lockoff_hold_seconds']=duration+.5
@@ -238,6 +285,9 @@ def lockon_mask(settings):
 
 def lockon_updates(settings):
     """Minimum active battle updates before release; zero means a simple tap."""
+    # Imported when used: the settings window must open even when the chosen game disc is damaged (the Game disc
+    # page repairs it), and native_map resolves that disc when it is imported.
+    from native_map import ACTOR_HZ
     return math.ceil(validate_settings(settings)[LOCKON_HOLD_KEY]*ACTOR_HZ)
 
 
@@ -255,18 +305,55 @@ def _unique_object(pairs):
     return result
 
 
+def _same_file(first, second):
+    try:
+        return Path(first).resolve() == Path(second).resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def developer_tree():
+    """True in a developer tree: no player-install.json and no installer copy of the defaults, this module's own
+    settings and defaults paths (a patched SETTINGS_PATH or DEFAULTS_PATH, as in tests, is not one), and the
+    installer's player-defaults.json beside the tree. An installation never is: its folder has no player-installer."""
+    return (_same_file(SETTINGS_PATH, ROOT / 'mod-settings.json')
+            and _same_file(DEFAULTS_PATH, ROOT / 'mod-settings-defaults.json')
+            and not (ROOT / 'player-install.json').exists() and not Path(DEFAULTS_PATH).exists()
+            and Path(SHIPPED_DEFAULTS).is_file())
+
+
+def defaults_path():
+    """This tree's shipped-defaults file: DEFAULTS_PATH when it exists (an installation: the installer's validated
+    copy of player-defaults.json), SHIPPED_DEFAULTS read in place in a developer tree, else None (the code DEFAULTS)."""
+    if Path(DEFAULTS_PATH).is_file():
+        return Path(DEFAULTS_PATH)
+    return Path(SHIPPED_DEFAULTS) if developer_tree() else None
+
+
+def developer_defaults(path=None):
+    """Developer trees only: the shipped defaults (validated, no language) that fill the keys this tree's own settings
+    file lacks. None elsewhere: an installation's file is complete, and an imported older file keeps the code
+    DEFAULTS for keys its release did not have (legacy behaviour; install_player.import_previous)."""
+    target = Path(path) if path is not None else Path(SETTINGS_PATH)
+    if not _same_file(target, SETTINGS_PATH) or not developer_tree():
+        return None
+    return installed_defaults(SHIPPED_DEFAULTS)
+
+
 def load_settings(path=None):
-    """Return defaults for a missing file; reject existing malformed data."""
+    """Return defaults for a missing file; reject existing malformed data. In a developer tree, keys the file lacks
+    (and a missing file) take the installer's player-defaults.json, as a new installation writes them."""
     path = Path(path) if path is not None else SETTINGS_PATH
+    shipped = developer_defaults(path)
     try:
         data = atomic_files.read_bytes(path)
     except FileNotFoundError:
-        return copy.deepcopy(DEFAULTS)
+        return validate_settings({}, defaults=shipped) if shipped else copy.deepcopy(DEFAULTS)
     try:
         settings = json.loads(data.decode('utf-8-sig'), object_pairs_hook=_unique_object)
     except (UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f'Cannot read mod settings at {path}: {error}') from error
-    return validate_settings(settings)
+    return validate_settings(settings, defaults=shipped)
 
 
 def save_settings(updates, path=None):
@@ -290,22 +377,55 @@ def save_settings(updates, path=None):
 
 
 def installed_defaults(path=None):
-    """The validated installer defaults, or None when absent or unusable."""
-    path = Path(path) if path is not None else DEFAULTS_PATH
+    """The validated installer defaults (without the language), or None when absent or unusable. path: a defaults
+    file; None: this tree's own (defaults_path(): an installation's copy, or a developer tree's SHIPPED_DEFAULTS)."""
+    path = Path(path) if path is not None else defaults_path()
+    if path is None:
+        return None
     try:
         raw = json.loads(atomic_files.read_bytes(path).decode('utf-8-sig'), object_pairs_hook=_unique_object)
-        return validate_settings(raw)
+        if type(raw) is dict:
+            raw.pop(LANGUAGE_KEY, None)
+        result = validate_settings(raw)
+        result.pop(LANGUAGE_KEY, None)
+        return result
     except (OSError, UnicodeError, ValueError):
         return None
 
 
 def default_settings(path=None):
     """What Restore defaults stages: the installed defaults when that file exists
-    and validates, otherwise DEFAULTS: every editable setting plus
-    npc_transform_overrides (so restoring resets the exceptions). Never contains
-    the language or the file version. Save changed keys only."""
+    and validates (a developer tree: the installer's player-defaults.json), otherwise
+    DEFAULTS: every editable setting plus npc_transform_overrides (so restoring
+    resets the exceptions). Never contains the language or the file version. Save
+    changed keys only."""
     source = installed_defaults(path) or DEFAULTS
     return {key: copy.deepcopy(source[key]) for key in DEFAULTS if key not in (LANGUAGE_KEY, 'version')}
+
+
+def installer_settings(language=None):
+    """What a new installation's mod-settings.json holds (install_player.write_settings): this tree's shipped
+    defaults (defaults_path), validated, plus `language` (None: the code default). None without them."""
+    shipped = installed_defaults()
+    if shipped is None:
+        return None
+    return validate_settings(dict(shipped, **{LANGUAGE_KEY: language or DEFAULTS[LANGUAGE_KEY]}))
+
+
+def developer_drift(path=None):
+    """Developer trees only: the editable keys whose effective value differs from a new installation's, in page
+    order. Empty in an installation, for another settings file, or when the file cannot be read."""
+    if developer_defaults(path) is None:
+        return []
+    try:
+        settings = load_settings(path)
+        fresh = installer_settings(settings[LANGUAGE_KEY])
+    except (OSError, ValueError):
+        return []
+    if fresh is None:
+        return []
+    keys = [key for key in ui_fields() if key != LANGUAGE_KEY] + [NPC_OVERRIDES_KEY]
+    return [key for key in keys if settings.get(key) != fresh.get(key)]
 
 
 def broken_copy_path(path=None):
@@ -601,10 +721,10 @@ def show_ui(path=None):
     buttons=ttk.Frame(outer);buttons.pack(side='bottom',fill='x',pady=(14,0))
     body=ttk.Frame(outer);body.pack(fill='both',expand=True)
     body.columnconfigure(1,weight=1);body.rowconfigure(0,weight=1)
-    groups=ui_groups();fields=ui_fields()
+    groups=ui_groups();fields=ui_fields();listed=groups+DESKTOP_PAGES
     categories=tk.Listbox(body,exportselection=False,activestyle='none',width=30,font=('Segoe UI',10),
-                          height=len(groups),highlightthickness=0)
-    for group in groups:categories.insert('end',' '+tr(group))
+                          height=len(listed),highlightthickness=0)
+    for group in listed:categories.insert('end',' '+tr(group))
     categories.grid(row=0,column=0,sticky='ns',padx=(0,14))
     holder=ttk.Frame(body);holder.grid(row=0,column=1,sticky='nsew')
     holder.rowconfigure(0,weight=1);holder.columnconfigure(0,weight=1)
@@ -613,7 +733,7 @@ def show_ui(path=None):
         canvas.itemconfigure(item,width=event.width)
         # The help note wraps to the page, so a narrower window never clips it.
         if group in footers:footers[group].configure(wraplength=max(240,event.width-28))
-    for group in groups:
+    for group in listed:
         container=ttk.Frame(holder);container.grid(row=0,column=0,sticky='nsew')
         canvas=tk.Canvas(container,highlightthickness=0)
         scrollbar=ttk.Scrollbar(container,orient='vertical',command=canvas.yview)
@@ -692,21 +812,29 @@ def show_ui(path=None):
     for group in groups:
         footers[group]=ttk.Label(pages[group],text=help_note(group),wraplength=560,foreground='#555555')
         footers[group].grid(row=rows[group],column=0,columnspan=2,sticky='w',pady=(18,8))
+    # Desktop-only pages act at once (their own buttons); Save and Cancel below are for the settings pages.
+    import disc_page
+    def language_changed(value):
+        controller.settings[LANGUAGE_KEY]=value;show_value(LANGUAGE_KEY,value)
+    disc=disc_page.build(pages[disc_page.PAGE],window,controller.settings,on_language=language_changed)
+    footers[disc_page.PAGE]=disc.footer
     if os.name!='nt':
         # Linux Tk fonts are wider than Segoe UI: size the minimum window from the widest settings row
         # (help notes wrap, so they are measured narrow) so nothing clips. Windows keeps 860 px.
         for footer in footers.values():footer.configure(wraplength=240)
         window.update_idletasks()
         needed=(2*16+categories.winfo_reqwidth()+14+scrollbar.winfo_reqwidth()
-                +max(page.winfo_reqwidth() for page in pages.values()))
+                +max(pages[group].winfo_reqwidth() for group in groups))
         for footer in footers.values():footer.configure(wraplength=560)
         if needed>860:window.minsize(needed,520);window.geometry(f'{max(940,needed)}x660')
     def select(_=None):
         chosen=categories.curselection()
-        if chosen:containers[groups[chosen[0]]].tkraise()
+        if chosen:
+            containers[listed[chosen[0]]].tkraise()
+            if listed[chosen[0]]==disc_page.PAGE:disc.shown()
     def selected_page():
         chosen=categories.curselection()
-        return canvases[groups[chosen[0]]] if chosen else None
+        return canvases[listed[chosen[0]]] if chosen else None
     wheel=PageWheel(window,selected_page,(ttk.Spinbox,ttk.Combobox,tk.Listbox))
     categories.bind('<<ListboxSelect>>',select);bind_wheel(window,wheel)
     categories.selection_set(0);select()

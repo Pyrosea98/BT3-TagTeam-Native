@@ -53,7 +53,7 @@ def capture_code():
     for r in (17,18):
         a.addiu(8,0,1);a.r(4,8,r,8);a.r(0x24,9,8,12);a.branch(4,9,0,'native')
         a.r(0x24,9,8,13);a.branch(5,9,0,'native')
-    a.move(19,17);a.addiu(20,0,2);a.li(21,ROWS);a.li(26,FULL_ROWS[0])
+    a.move(19,17);a.addiu(20,0,2);a.li(21,ROWS);a.li(15,FULL_ROWS[0])  # t7, never k0/k1: interrupts overwrite those (LS-2)
     a.label('body');a.r(0,8,0,19,2);a.li(9,core.POINTERS);a.r(0x21,8,8,9);a.lw(22,8)
     saved.pointer(a,22,0x1600,'native');a.lw(8,22);a.branch(5,8,19,'native')
     a.lw(8,22,0xE90);a.addiu(9,0,body.SCRIPT);a.branch(5,8,9,'native')
@@ -81,8 +81,8 @@ def capture_code():
     for dst,base,off in ((20,24,20),(24,24,12),(28,25,4),(32,25,64),(36,25,68),
                          (40,25,76),(44,25,84),(48,22,2376),(52,22,4),(56,22,0x1278),(60,25,0x70)):
         a.lw(8,base,off);a.sw(8,21,dst)
-    for off in range(0,164,4):a.lw(8,25,off);a.sw(8,26,off)
-    a.addiu(20,20,-1);a.move(19,18);a.addiu(21,21,64);a.addiu(26,26,0x100)
+    for off in range(0,164,4):a.lw(8,25,off);a.sw(8,15,off)
+    a.addiu(20,20,-1);a.move(19,18);a.addiu(21,21,64);a.addiu(15,15,0x100)
     a.branch(5,20,0,'body')
     for off in (12,24):a.lw(8,16,off);a.addiu(8,8,1);a.sw(8,16,off)
     a.r(0,8,0,17,4);a.li(9,body.DENIED);a.r(0x21,8,8,9)

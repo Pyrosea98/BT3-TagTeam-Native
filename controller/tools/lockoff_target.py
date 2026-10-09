@@ -320,7 +320,12 @@ def programs():
 def validate_memory(ram):
     if struct.unpack_from('<2I',ram,CONTROL)!=(MAGIC,struct.unpack_from('<I',ram,core.ACTORS)[0]):
         raise ValueError('Lock-off belongs to another capture')
+    # lockon_select hooks the INPUT/APPLY entries; it validates its own programs, never these.
+    import lockon_select
+    import lockon_threat
     for p,b in programs():
+        b=lockon_select.dependency_override(ram,p,b)
+        b=lockon_threat.dependency_override(ram,p,b)
         if ram[p:p+len(b)]!=b:raise ValueError(f'Lock-off executable changed at {p:X}')
 
 
@@ -350,7 +355,10 @@ def dependency_override(ram,address,expected):
 @modes.matching_install
 def build_memory(ram,settings=None,source='<prepared>'):
     options=mod_settings.validate_settings({} if settings is None else settings)
-    if not options['lockoff_enabled']:return dict(blocks=[])
+    # lockon_select needs these programs; with lock-off disabled they install with button mask 0,
+    # which can never set OFF (the switch path still reports its tap/hold-release request).
+    import lockon_select
+    if not (options['lockoff_enabled'] or lockon_select.wanted(options)):return dict(blocks=[])
     if len(ram)!=0x8000000:raise ValueError('Lock-off requires full captured memory')
     u=lambda p:struct.unpack_from('<I',ram,p)[0]
     manager,count=u(core.ACTORS),u(core.MODE+4)
@@ -371,7 +379,8 @@ def build_memory(ram,settings=None,source='<prepared>'):
     if ram[queue.CODE:queue.CODE+len(owned)]!=owned:raise ValueError('Lock-off queue predecessor changed')
     if any(ram[queue.CODE+len(owned):queue.CODE+len(new)]):raise ValueError('Lock-off queue growth is occupied')
     native=elf_reader(elf_path(ROOT))[2]
-    control=struct.pack('<5I',MAGIC,manager,mod_settings.LOCKON_MASKS[options['lockoff_button']],
+    control=struct.pack('<5I',MAGIC,manager,
+                        mod_settings.LOCKON_MASKS[options['lockoff_button']] if options['lockoff_enabled'] else 0,
                         max(1,math.ceil(options['lockoff_hold_seconds']*ACTOR_HZ)),HUD_POLICIES[options['lockoff_target_hud']])
     parts=[(INPUT,input_code()),(APPLY,apply_code()),(PICK,pick_code()),(CAMERA,camera_code()),(IS_OFF,is_off_code()),
            (HIDE_HUD,hide_hud_code()),(NATIVE_HUD,native_hud_code()),

@@ -29,7 +29,7 @@ def queue_for(selection):
     for row in selection['roster'][2:]:
         character,costume=row['character'],row['costume']
         damaged=selected_damage(row)
-        if not 0<=costume<=3:raise ValueError('Native costume index must be0..3')
+        if not 0<=costume<=3:raise ValueError('Native costume index must be 0..3')
         key=(character,costume,damaged)
         binding={'physical_id':row['physical_id'],'character':character,'costume':costume,'damaged':damaged}
         if row.get('participating') is False and row['loaded_resource'] is None:
@@ -191,9 +191,8 @@ def build(source, *, hold_idle=False, fast_pump=False, minimum_members=1):
     control=struct.pack('<8I',1,0,0,0,len(requests),selection['native_manager'],memory.CODE,selection['native_actor_array'])
     if hold_idle:
         import native_preparation as transport
-        for address,data in transport.code_pieces():
-            if r[address:address+len(data)]!=data:
-                raise ValueError('Idle resource hold requires the exact native transport')
+        if not transport.captured_transport(r):
+            raise ValueError('Idle resource hold requires the exact native transport')
         native=elf_reader(elf_path(ROOT))[2]
         if r[A(0x12BC94):A(0x12BCA4)]!=native(A(0x12BC94),16):
             raise ValueError('Idle resource hold requires the original actor dispatch calls')

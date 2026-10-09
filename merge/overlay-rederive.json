@@ -1,0 +1,36 @@
+{
+  "updated": [
+    "autopilot.py",
+    "body_swap_capture.py",
+    "body_swap_resources.py",
+    "character_names.py",
+    "extra_generic_effects.py",
+    "extra_reload_preload.py",
+    "extra_reload_service.py",
+    "extra_reload_stage.py",
+    "extra_special_pools.py",
+    "fresh_team_trainer.py",
+    "fusion_duration_worker.py",
+    "loading_presentation.py",
+    "mod_settings.py",
+    "npc_transform_policy.py",
+    "selected_resource_queue.py",
+    "selected_team_capture.py",
+    "selected_team_prepare.py",
+    "viewport_hud.py"
+  ],
+  "conflicts": [
+    "autopilot.py",
+    "extra_generic_effects.py",
+    "extra_special_pools.py",
+    "fresh_team_trainer.py",
+    "loading_presentation.py",
+    "mod_settings.py"
+  ],
+  "preserved": [
+    "body_swap.py",
+    "guest_killfeed.py",
+    "loading_design.py",
+    "spectator_feedback.py"
+  ]
+}

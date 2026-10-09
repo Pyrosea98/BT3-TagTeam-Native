@@ -15,6 +15,7 @@ import fresh_team_ai
 import afterimage_bounds
 import aura_index_guard
 import aux_effect_bounds
+import aux_trail_lists
 import ground_effect_bounds
 import extra_effect_suppression as cosmetics
 import projectile_pool_guard
@@ -91,7 +92,9 @@ def effects_code(original):
     return a.finish()
 
 
-def lifecycle_code(entry, cave, original, config):
+def lifecycle_code(entry, cave, original, config, trail_clear=True):
+    """trail_clear=False is the beta.36 emission (extra_cell_absorption accepts it as its predecessor in
+    captures prepared before beta.37)."""
     a = Assembler(cave); a.addiu(29, 29, -0x20)
     for i, reg in enumerate((8, 9, 10, 11)): a.i(63, reg, 29, i*8)
     a.li(8, CONTROL); a.lw(9, 8, 4); a.lw(10, 28, -22364)
@@ -110,6 +113,12 @@ def lifecycle_code(entry, cave, original, config):
         a.addiu(10, 0, -1); a.sw(10, 8, 8)
     for row in config['actors'][2:]:
         a.li(8, row['model']); a.sw(0, 8, 8)
+    # Forget the captured trail manager and the extras' trail lists: a manager the next battle
+    # creates at the same address must never inherit lists that point into this one's pool.
+    if trail_clear:
+        a.li(8, aux_trail_lists.CONTROL); a.sw(0, 8, aux_trail_lists.MGR)
+        for k in range(2*aux_trail_lists.OWNERS):
+            a.sw(0, 8, aux_trail_lists.HEADS+4*k)
     a.label('native')
     for i, reg in enumerate((8, 9, 10, 11)): a.i(55, reg, 29, i*8)
     a.addiu(29, 29, 0x20); native_tail(a, entry, original)
@@ -164,12 +173,15 @@ def build_memory(ram, config, source='<offline-fixture>', include_camera=True):
                             config['creation_header'], len(config['actors']), 0, 0), 'safety_capture', True)
     groups = ((afterimage_bounds, 'model_effect_bounds'), (aura_index_guard, 'model_effect_bounds'),
               (aux_effect_bounds, 'model_effect_bounds'), (ground_effect_bounds, 'model_effect_bounds'),
+              (aux_trail_lists, 'model_effect_bounds'),
               (projectile_pool_guard, 'projectile_pool_compatibility'),
               (special_projectile_pool_guard, 'projectile_pool_compatibility'),
               (cosmetics, 'model_effect_bounds'))
+    trails = None
     for module, feature in groups:
         overrides = {'predicate_code': cosmetic_predicate} if module is cosmetics else {}
         result = component(module, virtual, source, **overrides)
+        if module is aux_trail_lists: trails = result
         data_addresses = {getattr(module, 'CONTROL', -1)}
         if module is special_projectile_pool_guard:
             data_addresses = {f['control'] for f in module.FAMILIES}
@@ -225,11 +237,15 @@ def build_memory(ram, config, source='<offline-fixture>', include_camera=True):
     return dict(serial=SERIAL, crc=CRC, source=str(Path(source).resolve()),
         status='FRESH SAFETY INSTALLED; CORE MODE AND PUBLIC COUNT UNCHANGED', config=config,
         blocks=blocks, support={'capacity': policy.emitted_actors(), 'features': features},
-        control=CONTROL, dormant_mode=core.MODE,
-        limitations=['Unsupported extra special/cinematic and cosmetic requests are suppressed.',
+        control=CONTROL, dormant_mode=core.MODE, telemetry=dict(trails['telemetry']),
+        evidence=['Extra fighters own native auxiliary trails by fighter index; the two-owner trail lists are '
+                  'widened to twelve (aux_trail_lists) so an extra can never link a pool node to itself.'],
+        limitations=trails['limitations']+['Unsupported extra special/cinematic and cosmetic requests are suppressed.',
             'Projectiles whose borrowed character pool has an incompatible format return no projectile.',
             'Extra voices, statistics and replay entries are omitted.',
             'Lifecycle detaches and restores native auxiliary pointers but does not reclaim extra allocations.',
+            "Lifecycle forgets the captured trail manager and the extras' trail lists; a manager created later "
+            "in the same process tracks only the two leaders' trails.",
             'Native team results are enabled; winner presentation can still use a defeated original leader.',
             'Restore a clean source state before another match; full menu lifecycle is not implemented.',
             'Render-capacity proof and fresh private AI initialization remain activation prerequisites.'])

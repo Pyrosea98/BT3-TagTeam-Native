@@ -311,7 +311,7 @@ def configuration(ram, captured, bindings):
     # Preserve the latest row, while requiring every non-runtime word to match.
     for key in ('schema', 'serial', 'native_manager', 'native_actor_array',
                 'members_per_side', 'intended_fighter_count'):
-        assert captured[key] == current[key], f'Selection capture no longer matches:{key}'
+        assert captured[key] == current[key], f'Selection capture no longer matches: {key}'
     assert len(captured['roster']) == len(current['roster'])
     assert captured.get('team_counts', [captured['members_per_side']]*2) == current['team_counts'], 'Selected team sizes changed'
     assert captured.get('participation_mask', (1 << len(captured['roster']))-1) == current['participation_mask'], 'Selected participation changed'
@@ -319,12 +319,12 @@ def configuration(ram, captured, bindings):
         assert old.get('participating', True) == new['participating'], 'Selected member participation changed'
         for key in ('physical_id', 'side', 'slot', 'character', 'costume', 'source_leader',
                     'source_model', 'source_resource', 'native_row_address'):
-            assert old[key] == new[key], f'Selected member changed after capture:{key}'
+            assert old[key] == new[key], f'Selected member changed after capture: {key}'
         old_words = struct.unpack('<41I', bytes.fromhex(old['native_row_hex']))
         new_words = struct.unpack('<41I', bytes.fromhex(new['native_row_hex']))
         for index, (before, after) in enumerate(zip(old_words, new_words)):
             if index * 4 not in ROW_DYNAMIC_FIELDS:
-                assert before == after, f'Selected member changed after capture:row+{index * 4}'
+                assert before == after, f'Selected member changed after capture: row+{index * 4}'
         assert new_words[19] <= new_words[20] and new_words[21] <= new_words[22], 'Invalid native resource gauges'
         assert new_words[23] <= 30000, 'Invalid native MAX gauge'
         assert new_words[40] <= 1, 'Invalid selected-row activation marker'
@@ -367,7 +367,7 @@ def build_memory(ram, captured, bindings, source='<offline-memory-fixture>', out
     for entry, size in ((EXT_ENTRY, 0x30), (A(0x249AB8), 0xA0), (A(0x2554D8), 0x80),
                          (A(0x255CF0), 0x30), (A(0x113660), 0xA0), (A(0x24DB28), 0x70),
                          (A(0x1C0058), 0xD0), (A(0x1C0538), 0x570), (A(0x1C3E60), 0x1B0)):
-        assert ram[entry:entry + size] == native(entry, size), f'Native creation helper changed:{entry:X}'
+        assert ram[entry:entry + size] == native(entry, size), f'Native creation helper changed: {entry:X}'
     assert not any(ram[CODE:0x07360000]), 'Fresh selected creation arena occupied'
     regions = []
     if ram[HOOK:HOOK + 8] == native(HOOK, 8):

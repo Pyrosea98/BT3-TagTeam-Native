@@ -4,7 +4,7 @@ The reviewed host enables this service after validating its exact code. Without
 that worker, extras keep the existing no-Android fallback. The auxiliary ACK
 and FINISH never consume the actual replacement form's separate request row.
 """
-from native_map import A, PAL, elf_path
+from native_map import A, TRANSLATED, elf_path
 import struct
 from prototype import Assembler, ROOT, elf_reader
 import fresh_team_combat as core
@@ -428,8 +428,10 @@ def build_memory(ram,source='<prepared>'):
         actors.append(dict(model=model))
     config=dict(creation_header=u(safety.CONTROL+16),actors=actors)
     for entry,previous,_ in LIFECYCLE:
-        expected=safety.lifecycle_code(entry,previous,NATIVE(entry,8),config)
-        if ram[previous:previous+len(expected)]!=expected:
+        # The beta.37 detachment also forgets the widened trail lists; captures prepared before it keep the
+        # beta.36 detachment. Either is the exact captured predecessor this cleanup must run before.
+        candidates=[safety.lifecycle_code(entry,previous,NATIVE(entry,8),config,trail_clear=clear) for clear in (True,False)]
+        if not any(ram[previous:previous+len(expected)]==expected for expected in candidates):
             raise ValueError('Cell lifecycle predecessor changed')
     current=pieces()+initial_state(ram)
     native_handler=NATIVE(HANDLER,HANDLER_SIZE)
@@ -443,7 +445,7 @@ def build_memory(ram,source='<prepared>'):
     import json
     prior=[(b['address'],bytes.fromhex(b['data_hex']))for b in json.loads(
         (ROOT/'analysis/sept20-cell-visible-prior-pieces.json').read_text(encoding='utf-8'))]
-    for installed in ((),previous_pieces(False),previous_pieces(True),*(() if PAL else (prior+initial_state(ram),)),current):
+    for installed in ((),previous_pieces(False),previous_pieces(True),*(() if TRANSLATED else (prior+initial_state(ram),)),current):
         cave=bytearray(END-CODE);handler=bytearray(native_handler);external=dict(external_originals())
         for at,data in installed:
             if CODE<=at<END:cave[at-CODE:at-CODE+len(data)]=data

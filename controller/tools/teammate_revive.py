@@ -4,7 +4,7 @@ No actor/model reconstruction or ownership reset. Recovery protection belongs
 to this captured actor pointer and expires after the native animation exits.
 All installers are offline; the emulator is never opened or contacted here.
 """
-from native_map import A, elf_path
+from native_map import A, FLAG, elf_path
 import math
 import os
 import struct
@@ -164,7 +164,7 @@ def eligible(a,actor,index,dead,fail,mobile=False):
         if mobile and not dead:channel_action(a,fail,pending=True)
         else:a.addiu(9,0,-1);a.branch(5,8,9,fail)
     for off in (3480,3500,3512,0xFE0):a.lw(8,actor,off);a.branch(5,8,0,fail)
-    for flag in (0xB,0xBE,0x94,0x125,0x126,0x135):
+    for flag in map(FLAG,(0xB,0xBE,0x94,0x125,0x126,0x135)):
         for bank in (0x1085,0x10AD):
             a.i(36,8,actor,bank+(flag>>3));a.i(12,8,8,1<<(flag&7));a.branch(5,8,0,fail)
     a.lw(8,actor,12);a.i(11,9,8,policy.ENGINE_ACTORS);a.branch(4,9,0,fail)
@@ -425,10 +425,15 @@ def validate_memory(ram):
     for p,b in program(previous,version):
         import four_player_mode
         b=four_player_mode.dependency_override(ram,p,b)
+        import story_runtime
+        b=story_runtime.dependency_override(ram,p,b)
+        import tournament_ringout
+        b=tournament_ringout.dependency_override(ram,p,b)
         if ram[p:p+len(b)]!=b:
             if p==HOOKS[1]:
                 import body_swap_runner as bodies
-                if ram[p:p+len(b)]==JUMP(bodies.PROTECTED):
+                expected_contact=story_runtime.dependency_override(ram,p,JUMP(bodies.PROTECTED))
+                if ram[p:p+len(b)]==expected_contact:
                     if bodies.validate_memory(ram,previous_chain=False)!=CONTACT:
                         raise ValueError('Body Change revival continuation changed')
                     continue

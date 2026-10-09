@@ -40,6 +40,7 @@ from functools import lru_cache
 from PIL import Image, ImageDraw
 
 from prototype import ROOT
+from character_names import assets_folder
 from regional import tbp, SCISSOR_Y1, Y_ORIGIN, xyz2_y
 
 EXPECTED = ROOT/'analysis/loading-redesign-v4/captures/texture-probe-expected.png'
@@ -232,7 +233,7 @@ def foreground_picture():
     d.rectangle((272, 60, 463, 111), fill=(24, 40, 120, 208))                           # panel...
     d.rectangle((300, 70, 435, 101), fill=(0, 0, 0, 0))                                 # ...with a keyed window
     for k, character in enumerate(PORTRAITS):
-        with Image.open(ROOT/f'assets/portraits/{character:03d}.png') as portrait:
+        with Image.open(assets_folder()/f'portraits/{character:03d}.png') as portrait:
             image.alpha_composite(portrait.convert('RGBA').resize((64, 32), Image.Resampling.LANCZOS), (296+80*k, 130))
     d.rectangle((0, 0, WIDTH-1, HEIGHT-1), outline=(255, 255, 255, 255), width=1)
     return image

@@ -4,7 +4,7 @@ An optional upgrade of spectator_switch's exact legacy emission. No identity,
 team, target or resources are rewritten. The native human/CPU input flag and
 pad resolver change only after an originally human seat has been defeated.
 """
-from native_map import A
+from native_map import A, FLAG
 import struct
 from prototype import Assembler
 import spectator_switch as spec
@@ -30,6 +30,12 @@ F=dict(version=40,previous=44,include_dead=48,ports=52,human_ports=56,
        battle_mode=104,pad_tail=108,view_side=112)
 SQUARE=0x8000
 REGS=tuple(range(2,28))+(30,31)
+# payload()'s view side and lock row. beta.33 kept them in k0/k1, which belong to the EE kernel: its interrupt
+# entry overwrites both and never restores them. A spectator update interrupted after the lock row was computed
+# stored through k1 = COP0 Status (0x70030C1x), a TLB miss the match never left. fp and t5 are saved by save(),
+# and neither LOOKUP nor TAKE (which saves every register) writes them.
+SIDE,ROW=30,13
+KERNEL_SIDE,KERNEL_ROW=26,27   # the beta.33 emission (kernel_scratch=True), accepted for an in-place upgrade
 
 def save(a):
     a.addiu(29,29,-0x100)
@@ -139,10 +145,10 @@ def take(*,base=TAKE,commit=True,configurable=True,quad=False,ordinary=True):
         else:a.addiu(9,0,-1);a.branch(5,8,9,'no')
     for off in (3480,3500,3512):a.lw(8,21,off);a.branch(5,8,0,'no')
     for bank in (0x1085,0x10AD):
-        a.i(36,8,21,bank+(0x94>>3));a.i(12,8,8,1<<(0x94&7));a.branch(5,8,0,'no')
+        a.i(36,8,21,bank+(FLAG(0x94)>>3));a.i(12,8,8,1<<(FLAG(0x94)&7));a.branch(5,8,0,'no')
         if ordinary:
             # Actor-authored cameras may be active without a bound director.
-            a.i(36,8,21,bank+(0xD3>>3));a.i(12,8,8,1<<(0xD3&7));a.branch(5,8,0,'no')
+            a.i(36,8,21,bank+(FLAG(0xD3)>>3));a.i(12,8,8,1<<(FLAG(0xD3)&7));a.branch(5,8,0,'no')
     if not commit:
         # The on-screen offer uses the exact admission path, without changing
         # ownership, clearing input, queuing requests or touching fighter data.
@@ -187,7 +193,8 @@ def pad():
     a=Assembler(PAD);save(a);emit_pad(a,'native');a.label('return');restore(a,skip=(2,));a.jr()
     a.label('native');restore(a);a.jump(NATIVE_PAD);return a.finish()
 
-def payload(previous,automatic=False,revival=True):
+def payload(previous,automatic=False,revival=True,kernel_scratch=False):
+    side,row=(KERNEL_SIDE,KERNEL_ROW) if kernel_scratch else (SIDE,ROW)
     a=Assembler(spec.CODE);save(a);a.li(16,spec.CONTROL)
     a.lw(8,16);a.li(9,spec.MAGIC);a.branch(5,8,9,'done')
     a.lw(8,16,spec.FIELDS['enabled']);a.branch(4,8,0,'done');core.gate(a,'done');a.move(17,10)
@@ -205,11 +212,11 @@ def payload(previous,automatic=False,revival=True):
     a.lw(9,8,64);a.branch(5,9,0,'done')
     a.label('ports');a.move(18,0)
     a.label('port');a.r(0,8,0,18,2);a.r(0x2D,19,16,8)
-    a.move(26,18);a.li(8,spec.SCENE);a.lw(9,8,spec.SPLIT_OFF);a.addiu(8,0,spec.SPLIT_VALUE)
+    a.move(side,18);a.li(8,spec.SCENE);a.lw(9,8,spec.SPLIT_OFF);a.addiu(8,0,spec.SPLIT_VALUE)
     a.branch(4,8,9,'view_side_ready');a.branch(5,18,0,'next')
-    a.li(8,fresh.LEADER_CONTROL);a.lw(26,8,spec.LEADER_SIDE);a.i(11,9,26,2);a.branch(5,9,0,'view_side_ready');a.move(26,0)
-    a.label('view_side_ready');a.sw(26,19,F['view_side'])
-    a.r(0,8,0,26,2);a.r(0x2D,27,16,8)
+    a.li(8,fresh.LEADER_CONTROL);a.lw(side,8,spec.LEADER_SIDE);a.i(11,9,side,2);a.branch(5,9,0,'view_side_ready');a.move(side,0)
+    a.label('view_side_ready');a.sw(side,19,F['view_side'])
+    a.r(0,8,0,side,2);a.r(0x2D,row,16,8)
     a.addiu(8,0,1);a.r(4,8,18,8);a.lw(9,16,F['ports']);a.r(0x24,9,9,8);a.branch(4,9,0,'next')
     a.li(8,spec.pad_buttons());a.r(0,9,0,18,6);a.r(0,10,0,18,7);a.r(0x2D,9,9,10)
     a.r(0,10,0,18,8);a.r(0x2D,9,9,10);a.r(0x2D,8,8,9);a.lw(20,8)
@@ -225,14 +232,14 @@ def payload(previous,automatic=False,revival=True):
         # original body abandoned by an explicit CPU takeover.
         a.lw(8,19,F['watching']);a.branch(4,8,0,'already_alive')
         a.sw(0,19,F['held']);a.sw(0,19,F['watching'])
-        a.addiu(8,22,1);a.sw(8,27,spec.FIELDS['lock'])
-        a.r(0,8,0,26,2);a.li(9,fresh.SUCCESSOR_CONTROL);a.r(0x2D,8,8,9)
+        a.addiu(8,22,1);a.sw(8,row,spec.FIELDS['lock'])
+        a.r(0,8,0,side,2);a.li(9,fresh.SUCCESSOR_CONTROL);a.r(0x2D,8,8,9)
         a.sw(22,8,8);a.r(0,9,0,22,2);a.li(10,core.POINTERS)
         a.r(0x2D,9,9,10);a.lw(9,9);a.sw(9,8,0x30)
         a.addiu(9,0,1);a.sw(9,8,0x20);a.jump('next')
         a.label('already_alive')
     a.sw(0,19,F['held']);a.sw(0,19,F['watching']);a.lw(8,19,F['original']);a.branch(5,8,22,'next')
-    a.sw(0,27,spec.FIELDS['lock']);a.jump('next')
+    a.sw(0,row,spec.FIELDS['lock']);a.jump('next')
     a.label('watch');a.addiu(8,0,1);a.sw(8,19,F['watching'])
     a.i(12,8,20,SQUARE);a.branch(4,8,0,'gesture');a.i(12,8,21,SQUARE);a.branch(5,8,0,'gesture')
     # Square may itself be the user's target binding. In that one case use
@@ -240,11 +247,11 @@ def payload(previous,automatic=False,revival=True):
     a.li(8,spec.lock.CONTROL);a.lw(9,8,spec.lock.FIELDS['button']);a.li(8,SQUARE)
     a.branch(5,9,8,'take_key_ready');a.i(12,8,20,0x100);a.branch(4,8,0,'gesture')
     a.label('take_key_ready')
-    a.lw(5,27,spec.FIELDS['lock'])
+    a.lw(5,row,spec.FIELDS['lock'])
     if automatic:
         # Automatic successor cameras are genuine spectator views too. An
         # explicit cycle is no longer required before taking over that body.
-        a.branch(5,5,0,'chosen_takeover');a.r(0,8,0,26,2)
+        a.branch(5,5,0,'chosen_takeover');a.r(0,8,0,side,2)
         a.li(9,fresh.SUCCESSOR_CONTROL);a.r(0x2D,8,8,9);a.lw(5,8,8)
         a.jump('candidate_ready');a.label('chosen_takeover');a.addiu(5,5,-1)
         a.label('candidate_ready')
@@ -262,21 +269,21 @@ def payload(previous,automatic=False,revival=True):
     a.r(0x2B,8,11,25);a.branch(4,8,0,'next');a.addiu(11,11,1);a.sw(11,19,F['held']);a.jump('next')
     a.label('cancel');a.sw(0,19,F['held']);a.jump('next')
     a.label('released');a.sw(0,19,F['held']);a.r(0x2B,8,11,25);a.branch(5,8,0,'next')
-    a.li(8,fresh.SUCCESSOR_CONTROL);a.r(0,9,0,26,2);a.r(0x2D,8,8,9);a.lw(22,8,8)
+    a.li(8,fresh.SUCCESSOR_CONTROL);a.r(0,9,0,side,2);a.r(0x2D,8,8,9);a.lw(22,8,8)
     a.r(0x2B,8,22,17);a.branch(5,8,0,'current');a.move(22,0)
     a.label('current');a.move(23,0)
     a.label('scan');a.addiu(23,23,1);a.r(0x2B,8,23,17);a.branch(4,8,0,'next')
     a.r(0x21,24,22,23);a.r(0x2B,8,24,17);a.branch(5,8,0,'bounded');a.r(0x23,24,24,17)
     a.label('bounded');a.move(4,24);a.call(LOOKUP);a.branch(4,3,0,'scan')
-    a.addiu(8,24,1);a.sw(8,27,spec.FIELDS['lock'])
-    a.li(8,fresh.SUCCESSOR_CONTROL);a.r(0,9,0,26,2);a.r(0x2D,8,8,9);a.sw(24,8,8)
+    a.addiu(8,24,1);a.sw(8,row,spec.FIELDS['lock'])
+    a.li(8,fresh.SUCCESSOR_CONTROL);a.r(0,9,0,side,2);a.r(0x2D,8,8,9);a.sw(24,8,8)
     a.sw(24,16,spec.FIELDS['subject']);a.lw(8,16,spec.FIELDS['switches']);a.addiu(8,8,1);a.sw(8,16,spec.FIELDS['switches'])
     a.label('next');a.addiu(18,18,1);a.addiu(8,0,2);a.branch(5,18,8,'port')
     a.label('done');restore(a);a.jump(previous)
     data=a.finish();assert len(data)<LOOKUP-spec.CODE;return data
 
-def pieces(previous,coop=False,automatic=True,configurable=True,revival=True,ordinary=True):
-    result=[(spec.CODE,payload(previous,automatic,revival)),(LOOKUP,lookup()),(TAKE,take(configurable=configurable,ordinary=ordinary))]
+def pieces(previous,coop=False,automatic=True,configurable=True,revival=True,ordinary=True,kernel_scratch=False):
+    result=[(spec.CODE,payload(previous,automatic,revival,kernel_scratch)),(LOOKUP,lookup()),(TAKE,take(configurable=configurable,ordinary=ordinary))]
     if coop:result.append((pads.ACTOR_PAD,pads.payload(takeover=True)))
     else:result.extend(((PAD,pad()),(NATIVE_PAD,pads.NATIVE(pads.HOOK,0x20)),
                        (pads.HOOK,struct.pack('<2I',(2<<26)|(PAD>>2),0))))
@@ -292,13 +299,14 @@ def validate_memory(ram):
     if not 0x100000<=previous<0x8000000 or previous==spec.CODE:raise ValueError('Invalid spectator chain receipt')
     current=dict(pieces(previous,coop))
     found=None
-    for automatic,configurable,revival,ordinary in ((a,c,r,o) for o in (True,False) for r in (True,False)
+    for kernel_scratch,automatic,configurable,revival,ordinary in ((k,a,c,r,o) for k in (False,True)
+            for o in (True,False) for r in (True,False)
             for a,c in ((True,True),(True,False),(False,True),(False,False))):
-        former=pieces(previous,coop,automatic,configurable,revival,ordinary)
+        former=pieces(previous,coop,automatic,configurable,revival,ordinary,kernel_scratch)
         if all(ram[p:p+len(data)]==data and not any(ram[p+len(data):p+len(current[p])]) for p,data in former):
-            found=(automatic,configurable,revival);break
+            found=(automatic,configurable,revival,kernel_scratch);break
     if found is None:raise ValueError('Spectator upgrade code changed')
-    automatic,configurable,revival=found
+    automatic,configurable,revival,kernel_scratch=found
     if u(spec.CONTROL+OPTIONS) not in (0,OPTION_MAGIC):raise ValueError('Spectator preferences changed')
     if u(spec.CONTROL+OPTIONS)==OPTION_MAGIC and u(spec.CONTROL+TAKE_ENABLED) not in (0,1):
         raise ValueError('Invalid takeover preference')
@@ -306,7 +314,8 @@ def validate_memory(ram):
         for at,data in pads.pieces()[1:]:
             if ram[at:at+len(data)]!=data:raise ValueError('Co-op native pad chain changed')
     if u(spec.CONTROL+spec.FIELDS['manager'])!=u(core.ACTORS):raise ValueError('Spectator upgrade manager changed')
-    return dict(version=VERSION,previous=previous,automatic=automatic,configurable=configurable,revival=revival)
+    return dict(version=VERSION,previous=previous,automatic=automatic,configurable=configurable,revival=revival,
+                kernel_scratch=kernel_scratch)
 
 def build_memory(ram,*,battle_mode='teams',source='<prepared>',settings=None):
     if battle_mode not in modes.MODES:raise ValueError('Unknown spectator mode')

@@ -13,6 +13,7 @@ import os
 import socket
 import struct
 import sys
+import time
 from array import array
 from pathlib import Path
 
@@ -28,6 +29,12 @@ PCSX2_DEFAULT_SLOT = 0x6D6B
 SOCKET_ENV = "TAGTEAM_PINE_SOCKET"
 SUN_PATH_BYTES = 107  # PCSX2 Strlcpy()s the name into sockaddr_un.sun_path[108]
 UCRED = struct.Struct("=iII")  # SO_PEERCRED: pid_t pid, uid_t uid, gid_t gid
+# Windows may refuse a new loopback connection for a moment when its short-lived ports run low (WSAEADDRINUSE
+# 10048, WSAENOBUFS 10055; a watcher opens several a second). Nothing was sent yet, so the connection is tried
+# again after these pauses (1.6 s in all) before the error reaches the caller (live, Sept 28: a match setup
+# failed at Ready on the first 10048).
+CONNECT_RETRY = (0.05, 0.15, 0.4, 1.0)
+TRANSIENT_CONNECT = frozenset({10048, 10055})
 _runtime_guard = None
 _runtime_pid = None
 
@@ -53,6 +60,25 @@ def require_runtime():
 
 class PineError(RuntimeError):
     pass
+
+
+def transient_connect(error):
+    """A refused loopback connect that another try can pass (TRANSIENT_CONNECT), never a closed PCSX2."""
+    return getattr(error, "winerror", None) in TRANSIENT_CONNECT or getattr(error, "errno", None) in TRANSIENT_CONNECT
+
+
+def connect_tcp(port, retry=None, sleep=None):
+    """Blocking loopback connect (see PineClient.connect), tried again after each pause in `retry`
+    (CONNECT_RETRY) while Windows refuses it for want of ports; a closed emulator (require_runtime)
+    ends the waiting."""
+    for pause in (*(CONNECT_RETRY if retry is None else retry), None):
+        try:
+            return socket.create_connection(("127.0.0.1", port), None)
+        except OSError as error:
+            if pause is None or not transient_connect(error):
+                raise
+        (sleep or time.sleep)(pause)
+        require_runtime()
 
 
 def socket_path(slot, environ=None):
@@ -118,7 +144,7 @@ class PineClient:
             # timed connect costs ~9 ms even on loopback (0.2 ms blocking), and the watcher
             # opens a client per poll. A loopback handshake cannot hang: a closed or
             # saturated port is refused by the kernel in the same ~2 s either way.
-            self.sock = socket.create_connection(("127.0.0.1", self.port), None)
+            self.sock = connect_tcp(self.port)
             try:
                 self.sock.settimeout(self.timeout)
                 require_runtime()

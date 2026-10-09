@@ -1,4 +1,5 @@
 """Serial caller-owned service for real timed defusion (no connection creation)."""
+import os
 import struct
 from types import SimpleNamespace
 import fusion_duration as timer
@@ -12,6 +13,8 @@ import battle_mode_policy as policy
 import lazy_ram
 
 EPOCH_WORDS=(timer.CONTROL+24,timer.JOB_CONTROL+4,timer.JOB_CONTROL+8)
+# Service-owner claim written to CONTROL+12: this process's ID with bit 31 set (never 0).
+OWNER=0x80000000|(os.getpid()&0x7FFFFFFF)
 
 
 def retirement_memory(ram,owned,record,generation):
@@ -65,14 +68,26 @@ class Worker(shared.Worker):
                 with lazy_ram.patched():
                     try:pieces=[(at,four_player_mode.dependency_override(ram,at,data))for at,data in pieces]
                     except ValueError:continue
-                if all(p.read(at,len(data))==data for at,data in pieces):self.capacity=capacity;matched=True;break
+                if all(p.read(at,len(data))==data for at,data in pieces):self.capacity=capacity;self.pieces=pieces;matched=True;break
         if not matched:raise ValueError('Timed fusion executable changed')
         if p.read(timer.runner.HOOK,8)!=timer.JUMP(timer.FRAME):raise ValueError('Timed fusion frame hook changed')
         if any(p.read_u32(timer.RECORDS+i*timer.STRIDE) not in (0,5) for i in range(count)):
             raise ValueError('Cannot adopt an in-flight timed fusion')
-        if p.read_u32(timer.CONTROL+12)!=0:raise ValueError('Timed fusion already has a service owner')
-        self.apply(p,dict(blocks=[shared.live_block(p,timer.CONTROL+12,1)]))
+        # The claim carries this watcher's token (the guest only tests it for zero), so the
+        # same watcher may attach again after dropping its worker, with every record idle.
+        claim=p.read_u32(timer.CONTROL+12)
+        if claim not in (0,OWNER):raise ValueError('Timed fusion already has a service owner')
+        if claim==0:self.apply(p,dict(blocks=[shared.live_block(p,timer.CONTROL+12,OWNER)]))
         self.active=True;return True
+
+    def installed(self,p):
+        """The timed fusion service is still this match's and still claimed by this watcher.
+        Reads only (no claim, no write); see body_swap_worker.Worker.installed (match F1)."""
+        manager=p.read_u32(timer.CONTROL+4)
+        if (p.read_u32(timer.CONTROL)!=timer.MAGIC or p.read_u32(timer.CONTROL+8) not in policy.ACTOR_COUNTS or
+                p.read_u32(timer.core.ACTORS)!=manager or p.read_u32(timer.CONTROL+12)!=OWNER or
+                p.read(timer.runner.HOOK,8)!=timer.JUMP(timer.FRAME)):return False
+        return all(p.read(at,len(data))==data for at,data in getattr(self,'pieces',()))
 
     def _run(self,p,name,ram,manifest):
         runner=SimpleNamespace(**dict(vars(timer.runner),CONTROL=timer.JOB_CONTROL))
@@ -101,16 +116,21 @@ class Worker(shared.Worker):
             ram=self._snapshot(p);snap=restore.snapshot(ram,side)
             ram=self.release_stage_getter(p,ram,reload_worker)
             self.progress('Restoring the original fusion partners')
+            io=restore.invoke(resources.io_memory,ram,snap,side);self._run(p,'io',ram,io)
+            ram=self._snapshot(p);stage=restore.invoke(resources.stage_memory,ram,snap,side);self._run(p,'stage',ram,stage)
+            ram=self._snapshot(p);receipt=restore.invoke(resources.staged_receipt,ram,snap,side,io['capacities'])
+            self.apply(p,resources.detach_memory(ram,receipt,io,stage));self.owned.pop('io');self.owned.pop('stage')
+            # Stage the original body while the fusion still holds its idle
+            # pose. Playing power-down before disc IO left that finished pose
+            # visibly frozen for the entire load. Once the hidden replacement
+            # exists, presentation can lead straight into the atomic split.
+            ram=self._snapshot(p)
             if p.read_u32(timer.CONTROL+48):
                 import fusion_defusion_animation as animation
                 presentation=animation.build_memory(ram,snap)
                 if presentation is not None:
                     self._run(p,'retire',ram,presentation);ram=self._snapshot(p)
                     self._clear(p,ram,('retire',),timer.runner.RETIRE,timer.runner.END);ram=self._snapshot(p)
-            io=restore.invoke(resources.io_memory,ram,snap,side);self._run(p,'io',ram,io)
-            ram=self._snapshot(p);stage=restore.invoke(resources.stage_memory,ram,snap,side);self._run(p,'stage',ram,stage)
-            ram=self._snapshot(p);receipt=restore.invoke(resources.staged_receipt,ram,snap,side,io['capacities'])
-            self.apply(p,resources.detach_memory(ram,receipt,io,stage));self.owned.pop('io');self.owned.pop('stage')
             import fusion_defusion_placement as placement
             ram=self._snapshot(p);separation=placement.build_memory(ram,snap,receipt)
             self._run(p,'retire',ram,separation)

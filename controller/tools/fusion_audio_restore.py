@@ -30,8 +30,9 @@ def bank_file(character,japanese):
     import game_profile
     import regional
     source=game_profile.source_iso(ROOT.parent/'games'/regional.ISO_NAME)
-    # Short-voice banks: USA 3034+c (English) / 3195+c (Japanese); European 3281+c / 3442+c (same data).
-    with (regional.open_disc(source) if regional.PAL else Disc(source)) as disc:
+    # Short-voice banks: USA 3034+c (English) / 3195+c (Japanese); European 3281+c / 3442+c; Japanese disc
+    # 2952+c / 3113+c (same data).
+    with (regional.open_disc(source) if regional.DISC_REGION!='US' else Disc(source)) as disc:
         data=disc.read(regional.FILE_ID((3195 if japanese else 3034)+character))
     parts=package(data)
     body.require(len(parts)>=3 and len(data)<=591872,'Invalid native short-voice bank')

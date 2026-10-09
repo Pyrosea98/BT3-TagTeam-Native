@@ -63,23 +63,37 @@ def code(previous):
 
 
 TRAMPOLINE = CODE+0x400
+# Previous chain heads chain_head() accepts. The release builders that share it (lockon_switch, team_start_gate,
+# team_intro) keep the reviewed battle wrappers in 0x07000000..0x07400000. The scripted-input injector below is
+# reproduction tooling: it accepts any head in the guest reservations above heap1 (which ends at 0x06000000),
+# because current prepared matches chain through wrappers at 0x06C10000 (four-player co-op), 0x077A0000 (the
+# 5v5 sound hook) and 0x077C0000 (team participation).
+BATTLE_HEADS, GUEST_HEADS = (0x07000000, 0x07400000), (0x06000000, 0x08000000)
 SOUND_CODE, SOUND_TRAMPOLINE, SOUND_CONTROL, SOUND_RING = 0x073D0500, 0x073D0700, 0x073D0900, 0x073D0A00
 SOUND_HOOK, RING_ENTRIES = A(0x1D9B78), 1024
 
 
-def chain_head(ram, hook, trampoline, native):
+def chain_head(ram, hook, trampoline, native, heads=BATTLE_HEADS):
     """Return (previous target, extra payloads) for hooking at hook."""
     u = lambda p: struct.unpack_from('<I', ram, p)[0]
     word = u(hook)
     if word >> 26 == 2 and u(hook+4) == 0:
         previous = (word & 0x3FFFFFF) << 2
-        if not 0x07000000 <= previous < 0x07400000: raise ValueError(f'Unreviewed hook chain head {previous:08X}')
+        if not heads[0] <= previous < heads[1]: raise ValueError(f'Unreviewed hook chain head {previous:08X}')
         return previous, []
     original = native(hook, 8)
     if ram[hook:hook+8] != original: raise ValueError(f'Unknown bytes at hook {hook:X}')
     for w in struct.unpack('<2I', original):
         if w >> 26 in (1, 2, 3, 4, 5, 6, 7, 20, 21): raise ValueError('Native prologue needs branch relocation')
     return trampoline, [(trampoline, original+struct.pack('<2I', (2<<26)|((hook+8)>>2), 0), 'Displaced native prologue')]
+
+
+def injector_head(ram, hook, trampoline, native):
+    """chain_head for this injector's own hooks: any guest head, never one of its own entry points."""
+    previous, extra = chain_head(ram, hook, trampoline, native, heads=GUEST_HEADS)
+    if previous in (CODE, SOUND_CODE, PLAY_CODE):
+        raise ValueError(f'Hook chain head {previous:08X} is this injector: the image already has it installed')
+    return previous, extra
 
 
 def sound_code(previous):
@@ -122,19 +136,19 @@ def build_memory(ram, source='<offline>', sound_log=True):
     manager = u(A(0x2FEB14))
     if not 0x100000 <= manager < len(ram) or u(manager) != 2: raise ValueError('Native two-row manager required')
     _, _, native = elf_reader(elf_path(ROOT))
-    previous, extra = chain_head(ram, HOOK, TRAMPOLINE, native)
+    previous, extra = injector_head(ram, HOOK, TRAMPOLINE, native)
     if any(ram[CODE:SOUND_RING+RING_ENTRIES*16]): raise ValueError('Input-script reservation occupied')
     control = bytearray(0x100); struct.pack_into('<2I', control, 0, 1, manager)
     payloads = extra+[(CODE, code(previous), 'Scripted input injector at the head of the actor-update chain'),
                 (CONTROL, bytes(control), 'Injector control: enabled, manager, frames; entries at +0x20'),
                 (HOOK, struct.pack('<2I', (2<<26)|(CODE>>2), 0), 'Chain injector before the previous wrapper')]
     if sound_log:
-        sound_previous, sound_extra = chain_head(ram, SOUND_HOOK, SOUND_TRAMPOLINE, native)
+        sound_previous, sound_extra = injector_head(ram, SOUND_HOOK, SOUND_TRAMPOLINE, native)
         payloads += sound_extra+[(SOUND_CODE, sound_code(sound_previous), 'Sound request ring logger'),
                     (SOUND_CONTROL, bytes(0x100), 'Sound log: total count, ring index'),
                     (SOUND_HOOK, struct.pack('<2I', (2<<26)|(SOUND_CODE>>2), 0), 'Chain sound logger before the previous wrapper')]
         if any(ram[PLAY_CODE:PLAY_RING+PLAY_ENTRIES*16]): raise ValueError('Play-counter reservation occupied')
-        play_previous, play_extra = chain_head(ram, PLAY_HOOK, PLAY_TRAMPOLINE, native)
+        play_previous, play_extra = injector_head(ram, PLAY_HOOK, PLAY_TRAMPOLINE, native)
         payloads += play_extra+[(PLAY_CODE, play_code(play_previous), 'Native sound play ring logger'),
                     (PLAY_CONTROL, bytes(0x100), 'Play log: total count, ring index'),
                     (PLAY_HOOK, struct.pack('<2I', (2<<26)|(PLAY_CODE>>2), 0), 'Chain play logger before native play')]

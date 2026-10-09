@@ -149,7 +149,7 @@ def require_readable(info):
         raise ValueError(
             f'Savestate entry {info.filename} uses ZIP compression method {method} ({name}), which the mod '
             'cannot read. Set PCSX2 savestate compression to Zstandard ([EmuCore] SavestateCompressionType = 2; '
-            'Play.cmd sets it for each session), then save the state again.')
+            'Play sets it for each session), then save the state again.')
 
 
 def read_entry(archive, raw_file, info):

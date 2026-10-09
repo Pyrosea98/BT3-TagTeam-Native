@@ -97,9 +97,11 @@ def free_code(index):
     b=a.finish();assert len(b)<=0x200;return b
 
 
+# Guest stack frames are multiples of 16 bytes (LS-2): the BIOS saves a preempted thread with sq (aligned
+# down to 16) and sd HI/LO at exact offsets, so with $sp = 8 mod 16 its saved $gp became LO1 on resume.
 def drain_giant_code():
     """Drain all ten native subchains before any giant instance is destroyed."""
-    a=Assembler(DRAIN_G);a.addiu(29,29,-40)
+    a=Assembler(DRAIN_G);a.addiu(29,29,-48)
     for i,r in enumerate((16,17,18,19,31)):a.i(63,r,29,i*8)
     a.li(16,FAMILIES[0]['table']);a.addiu(17,0,12)
     a.label('owner');a.lw(8,16);a.branch(4,8,0,'next')
@@ -108,7 +110,7 @@ def drain_giant_code():
     a.addiu(18,18,144);a.addiu(19,19,-1);a.branch(5,19,0,'group')
     a.label('next');a.addiu(16,16,4);a.addiu(17,17,-1);a.branch(5,17,0,'owner')
     for i,r in enumerate((16,17,18,19,31)):a.i(55,r,29,i*8)
-    a.addiu(29,29,40);a.jr();b=a.finish();assert len(b)<=0x100;return b
+    a.addiu(29,29,48);a.jr();b=a.finish();assert len(b)<=0x100;return b
 
 
 def code(previous,actors,mids,models,captures):

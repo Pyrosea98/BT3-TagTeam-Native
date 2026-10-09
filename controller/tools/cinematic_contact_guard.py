@@ -3,7 +3,7 @@
 This prevents new outside contacts; it does not cancel damage already queued
 by an earlier interrupted cinematic or repair throw animation resource binding.
 """
-from native_map import A, CRC, SERIAL, elf_path
+from native_map import A, CRC, FLAG, SERIAL, elf_path
 import argparse
 import json
 import struct
@@ -42,11 +42,11 @@ def paired_pending(a, actor, yes):
     tag=f'pending_{len(a.words)}';ready=tag+'_rush';done=tag+'_done'
     a.lw(8,actor,4016);a.addiu(9,0,34);a.branch(4,8,9,ready)
     for bank in (0x1085,0x10AD):
-        a.i(36,8,actor,bank+(0x72>>3));a.i(12,8,8,1<<(0x72&7))
+        a.i(36,8,actor,bank+(FLAG(0x72)>>3));a.i(12,8,8,1<<(FLAG(0x72)&7))
         a.branch(5,8,0,ready)
     a.jump(done);a.label(ready)
     for bank in (0x1085,0x10AD):
-        a.i(36,8,actor,bank+(0x94>>3));a.i(12,8,8,1<<(0x94&7))
+        a.i(36,8,actor,bank+(FLAG(0x94)>>3));a.i(12,8,8,1<<(FLAG(0x94)&7))
         a.branch(5,8,0,yes)
     a.label(done)
 

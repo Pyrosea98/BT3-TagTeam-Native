@@ -4,7 +4,7 @@ This is an offline copier stage. It never connects to PCSX2, changes the source
 archive, or starts a watcher. The guest initializers run synchronously ahead of
 the existing start gate; only that gate may restore the preset CPU assignments.
 """
-from native_map import PAL, elf_path
+from native_map import TRANSLATED, elf_path
 import struct
 
 from prototype import Assembler
@@ -139,7 +139,7 @@ def transport_memory(ram, source='<offline>'):
             (ROOT/'analysis/sept20-before-coop-training-menu-code.json').read_text())},
         {row['address']:bytes.fromhex(row['data_hex']) for row in json.loads(
             (ROOT/'assets/native-menu-pre-settings.json').read_text())}]
-    if PAL:previous_menus=[]  # USA-only prior menu images (native USA hook addresses)
+    if TRANSLATED:previous_menus=[]  # USA-only prior menu images (native USA hook addresses)
     # Three-player selection grew into the old prompt entry at 07699800;
     # that dormant prompt now starts at 07699900. Validate the complete owned
     # code interval as one image, including zeros between/after its helpers.
@@ -234,6 +234,14 @@ def transport_memory(ram, source='<offline>'):
             previous=(ROOT/'analysis/sept20-before-background-io-gate.bin').read_bytes()
             if len(previous)>len(data):raise ValueError('Prior native dispatch gate exceeds new span')
             allowed+=(previous+bytes(len(data)-len(previous)),)
+            # beta.35/36 captures: the same gate with the phase-1 rewrite limited to substates below 4.
+            for previous in native.previous_gate_images():
+                if len(previous)>len(data):raise ValueError('Prior native dispatch gate exceeds new span')
+                allowed+=(previous+bytes(len(data)-len(previous)),)
+        if p==native.CODE:
+            for previous in native.previous_service_images():
+                if len(previous)>len(data):raise ValueError('Prior native preparation service exceeds new span')
+                allowed+=(previous+bytes(len(data)-len(previous)),)
         if p==mode_menu.HOOK:
             allowed+=(dict(mode_menu.code_pieces())[mode_menu.HOOK],struct.pack('<2I',(2<<26)|(legacy_address>>2),0))
         if p==legacy_address and retire_legacy:allowed+=(legacy,)

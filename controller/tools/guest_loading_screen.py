@@ -216,13 +216,13 @@ def _draw_picture(teams=(), progress=0, message='GETTING YOUR FIGHTERS READY', *
     return canvas
 
 
-def _compose(teams,progress,message,mode,humans):
+def _compose(teams,progress,message,mode,humans,error=None):
     """Ki Storm artwork; a presentation defect must never abort a preparation."""
     try:
         import loading_art_v4
-        return loading_art_v4.compose(teams,progress,message,mode=mode,humans=humans)
+        return loading_art_v4.compose(teams,progress,message,mode=mode,humans=humans,**({'error':error} if error else {}))
     except Exception:
-        canvas=_draw_picture(teams,progress,message,mode=mode,humans=humans)
+        canvas=_draw_picture(teams,progress,' / '.join(error) if error else message,mode=mode,humans=humans)
         return dict(background=canvas,foreground=None,lights=None)
 
 
@@ -270,12 +270,12 @@ def composite(layers):
     return Image.composite(fg,layers['background'].convert('RGB'),mask)
 
 
-def render(teams=(),progress=0,message='GETTING YOUR FIGHTERS READY',*,mode='teams',humans=1):
-    """Return (picture, layers, packets) for one loading screen."""
+def render(teams=(),progress=0,message='GETTING YOUR FIGHTERS READY',*,mode='teams',humans=1,error=None):
+    """Return (picture, layers, packets) for one loading screen (error: the failure state's two lines)."""
     import os
     if os.environ.get('BT3_LOADING_PROBE')=='1':   # Phase 0c: the guest draws the textured test card instead
         import loading_texture_probe;return loading_texture_probe.render()
-    layers=_compose(teams,progress,str(message),mode,humans)
+    layers=_compose(teams,progress,str(message),mode,humans,error)
     try:packets=layer_packets(layers)
     except ValueError:
         # Only the rectangle fallback has a sprite budget: fewer portrait colours fit it.
@@ -391,10 +391,14 @@ def payload(menu_surface=True,native_modals=True):
             import native_menu_services as menus
             import team_assignment as teams
             import ingame_settings as settings
+            import scenario_menu as scenarios
             menus.scope(a,'legacy_menu')
             a.lw(9,8,teams.STATE);a.addiu(10,0,1);a.branch(5,9,10,'settings_modal')
             a.lw(9,8,teams.LEASE);a.branch(5,9,0,'menu_ready')
             a.label('settings_modal');a.li(8,settings.CONTROL);a.lw(9,8);a.li(10,settings.MAGIC)
+            a.branch(5,9,10,'scenario_modal');a.lw(9,8,4);a.addiu(10,0,1);a.branch(5,9,10,'scenario_modal')
+            a.lw(9,8,8);a.branch(5,9,0,'menu_ready')
+            a.label('scenario_modal');a.li(8,scenarios.CONTROL);a.lw(9,8);a.li(10,scenarios.MAGIC)
             a.branch(5,9,10,'legacy_menu');a.lw(9,8,4);a.addiu(10,0,1);a.branch(5,9,10,'legacy_menu')
             a.lw(9,8,8);a.branch(5,9,0,'menu_ready')
             a.label('legacy_menu')
@@ -687,25 +691,27 @@ class GuestLoadingScreen:
         self.visible=True
         return self.sync(force=True,client=client)
 
-    def show(self,message,progress):
+    def show(self,message,progress,*,error=None):
+        # error=(line 1, line 2): the failure state (red text, no gauge); its key never matches a pre-render.
         with self.lock:
             self.surface=0;progress=max(0,min(100,int(progress)))
-            key=(localization.language(),self.mode,self.humans,repr(self.teams),str(message))
+            key=(localization.language(),self.mode,self.humans,repr(self.teams),str(message))+((tuple(error),) if error else ())
             if key!=self.key or self.layers is None or (not is_v4(self.layers) and progress!=self.progress):
-                self.layers,packets=self._picture(key,progress,str(message))
+                self.layers,packets=self._picture(key,progress,str(message),error=tuple(error) if error else None)
                 self._publish(packets);self.key=key
             elif progress!=self.progress and self.descriptor:
                 self.descriptor=descriptor_for(self.layers,progress);self._bump()
             self.progress=progress
             return self._show()
 
-    def _picture(self,key,progress,message):
+    def _picture(self,key,progress,message,*,error=None):
         with _RENDER_LOCK:
             with self._ahead_lock:
                 ahead=self._ahead.pop(key,None)
                 if key[:4]==self._ahead_context:self._ahead_used.add(key)
             if ahead is None:
-                _,layers,packets=render(self.teams,progress,message,mode=self.mode,humans=self.humans)
+                _,layers,packets=render(self.teams,progress,message,mode=self.mode,humans=self.humans,
+                                        **({'error':error} if error else {}))
                 return layers,packets
         # A v4 picture does not depend on progress (the guest draws the gauge from the
         # descriptor), so a pre-rendered one only needs this progress's descriptor.
@@ -817,7 +823,7 @@ class GuestLoadingScreen:
     def hide(self,client=None):
         from pine import PineClient,PineError
         with self.lock:
-            self.visible=False;invalidate_buffers()
+            self.visible=False;self._stale_since=None;invalidate_buffers()
             try:
                 with nullcontext(client) if client is not None else PineClient(timeout=3) as p:
                     if p.read(HOOK,4)==code_pieces()[-1][1]:

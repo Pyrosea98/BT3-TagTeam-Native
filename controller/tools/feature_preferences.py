@@ -28,17 +28,47 @@ OPTIONS = {
     'lockoff_button': ('l3','button',input_binding.BUTTONS,None,'Controls','Lock-off button'),
     'lockoff_hold_seconds': (0.5,'float',0,3600,'Controls','Lock-off hold time (seconds; 0 = tap)'),
     'lockoff_target_hud': ('single_enemy','choice',('single_enemy','hide','show'),None,'HUD','Target HUD while unlocked'),
+    # lockon_select. Legacy values (beta.33 behaviour, nothing installed when all four hold them):
+    # selection_order, False, game_default, False.
+    # lockon_right_stick_mode only matters while lockon_right_stick is True (not a legacy key).
+    'lockon_cycle_order': ('selection_order','choice',('left_to_right','nearest_first','selection_order'),None,'Controls','Target switch order'),
+    'lockon_right_stick': (False,'bool',None,None,'Controls','Right stick picks a target'),
+    'lockon_right_stick_mode': ('with_switch_button','choice',('with_switch_button','right_stick_alone'),None,'Controls','Picking with the right stick'),
+    'lockon_after_ko': ('game_default','choice',('nearest_to_centre','game_default'),None,'Controls','When your target is defeated'),
+    'lockon_target_marker': (False,'bool',None,None,'HUD','Mark your target'),
+    # beta.39: the arrow (beta.37) is the default again; the ring (beta.38) is an option. Only matters while the
+    # marker is on (not a legacy key).
+    'lockon_target_style': ('arrow','choice',('arrow','ring','both'),None,'HUD','Target indicator'),
+    # lockon_threat. Legacy values (beta.36 behaviour, nothing installed when both hold them): never, hide.
+    'lockon_attacker_switch': ('never','choice',('never','tap_during_warning','when_hit'),None,'Controls','Switch to your attacker'),
+    'lockon_threat_marks': ('hide','choice',('hide','marks','marks_and_warning'),None,'HUD','Enemies targeting you'),
+    # outnumbered (beta.37). Preset 'off' installs nothing (beta.36 behaviour); so does a Custom preset whose five
+    # value rows are all neutral (0, 0, 100, 0, 0). The two who-rows apply to every preset; the value rows only to
+    # Custom (ingame_settings DEPENDS/DIMMED_BY dim them otherwise).
+    'outnumbered_preset': ('off','choice',('off','balanced','strong','custom'),None,'Outnumbered','Help when outnumbered'),
+    'outnumbered_scope': ('also_ganged_up','choice',('smaller_team','also_ganged_up'),None,'Outnumbered','Who counts as outnumbered'),
+    'outnumbered_applies_to': ('everyone','choice',('everyone','humans'),None,'Outnumbered','Help applies to'),
+    'outnumbered_damage_bonus_percent': (15,'int',0,100,'Outnumbered','Damage dealt: + per extra enemy (%)'),
+    'outnumbered_damage_reduction_percent': (10,'int',0,60,'Outnumbered','Damage taken: - per extra enemy (%)'),
+    'outnumbered_recovery_speed_percent': (150,'int',100,300,'Outnumbered','Recovery and get-up speed (%; 100 = normal)'),
+    'outnumbered_getup_protection_seconds': (0.5,'float',0,3,'Outnumbered','Protection after getting up (seconds; 0 = off)'),
+    'outnumbered_combo_breaker_hits': (12,'int',0,30,'Outnumbered','Break a combo after this many hits (0 = off)'),
     'language': ('en','choice',('en','es'),None,'Menus','Language / Idioma'),
     'rush_cinematics': (False,'bool',None,None,'Cinematics','Rush attacks: shared camera and pause'),
+    'prevent_cinematic_recentering': (False,'bool',None,None,'Cinematics','Keep attacks and transformations at their current location'),
     'true_body_change': (False,'bool',None,None,'Fighters','Ginyu: exchange bodies with the actual opponent'),
     'ginyu_stolen_abilities': (False,'bool',None,None,'Fighters','Ginyu can use stolen-body abilities'),
     'npc_transform_chance_percent': (100,'int',0,100,'Fighters','CPU transformation chance (%; 100 = normal)'),
     'native_mode_menu_enabled': (True,'bool',None,None,'Menus','Mod mode menus'),
     'menu_toggle_button': ('select','button',('select','l3','r3','start','l2','r2','l1','r1','square'),None,'Menus','Menu switch button'),
     'show_menu_toggle_hint': (True,'bool',None,None,'Menus','Show the menu switch button hint'),
-    'coop_independent_selection': (True,'bool',None,None,'Character select','Each player picks their own assigned fighters'),
-    'all_controllers_character_select': (False,'bool',None,None,'Character select','Allow all controllers during character selection'),
-    'show_player_slot_labels': (True,'bool',None,None,'Character select','Show player numbers above selection slots'),
+    'coop_independent_selection': (True,'bool',None,None,'Players and controllers','Each player picks their own assigned fighters'),
+    'all_controllers_character_select': (False,'bool',None,None,'Players and controllers','Allow all controllers during character selection'),
+    'show_player_slot_labels': (True,'bool',None,None,'Players and controllers','Show player numbers above selection slots'),
+    # Player Setup's controller check-in (controller_checkin). The code default keeps beta.36's connection order;
+    # installs ship 'three_or_more' (player-defaults.json).
+    'controller_checkin': ('connection_order','choice',('three_or_more','two_or_more','connection_order'),None,'Players and controllers','Controller check-in (each player presses START)'),
+    'keep_controller_checkins': (True,'bool',None,None,'Players and controllers','Keep check-ins for the next matches (until Play closes)'),
     'training_cpu_behavior': ('idle','choice',('idle','fight'),None,'Training','CPU behavior'),
     'training_refill_health': (True,'bool',None,None,'Training','Refill health and prevent knockouts'),
     'training_health_delay_seconds': (2.0,'float',0,30,'Training','Health refill delay after damage (seconds)'),
@@ -52,6 +82,7 @@ OPTIONS = {
     'takeover_confirmation_seconds': (3.0,'float',0.25,15,'Spectating','Takeover confirmation time (seconds)'),
     'extra_character_voices': (True,'bool',None,None,'Fighters','Extra fighter voice lines'),
     'extra_character_intros': (False,'bool',None,None,'Cinematics','Introductions for extra fighters'),
+    'battle_camera_distance_percent': (100,'int',100,200,'Cinematics','Battle camera zoom-out (%; 100 = normal)'),
     'loading_animation_speed_percent': (100,'int',25,400,'Menus','Loading animation speed (%; 100 = normal)'),
     'expanded_maps': (False,'bool',None,None,'Launch options (restart)','Experimental 2x maps (restart)'),
     'widescreen_patch': (False,'bool',None,None,'Launch options (restart)','PCSX2 16:9 widescreen patch (restart; automatic for BT4)'),
@@ -69,6 +100,8 @@ OPTIONS = {
     'record_battle_diagnostics': (False,'bool',None,None,'Diagnostics','Write diagnostic battle history to disk'),
     'coop_fusion_swap_seconds': (20,'int',5,60,'Fusion','Fusion control swap interval (seconds)'),
     'show_fuse_prompt': (True,'bool',None,None,'Fusion','Show R3 fusion prompt'),
+    'fusion_enabled': (True,'bool',None,None,'Fusion','Allow fusions'),
+    'tournament_ring_outs': (False,'bool',None,None,'Battle rules','Tournament ring-outs'),
     'fusion_duration_enabled': (False,'bool',None,None,'Fusion','Timed fusion and automatic defusion'),
     'fusion_duration_seconds': (40,'int',1,300,'Fusion','Fusion time limit (seconds)'),
     'fusion_time_by_form': (False,'bool',None,None,'Fusion','Fusion time drains faster in stronger forms'),
@@ -92,6 +125,29 @@ OPTIONS = {
     'revive_ring_opacity': (0.45,'float',0,1,'Revival','Revival ring opacity'),
     'revive_ring_wave_height': (8.0,'float',0,80,'Revival','Revival ring wave height (0 = flat)'),
     'revive_ring_wave_speed': (1.0,'float',0,5,'Revival','Revival ring wave speed (cycles per second)'),
+    # beam_struggle (beta.37; beta.38 removed the splash options and made the assist R3 near the ally). Legacy values,
+    # nothing installed while all hold them: native, 0, 100, False, False. The detail rows only matter while their
+    # switch is on (ingame_settings DEPENDS).
+    # beta.40: the struggle's own scripted camera (native) or every view kept on its own player (installs KEEPCAM).
+    'beam_clash_camera': ('clash','choice',('clash','keep'),None,'Beam struggles','Beam clash camera'),
+    'beam_struggle_length': ('native','choice',('native','long','very_long'),None,'Beam struggles','Beam struggle length'),
+    'beam_struggle_push_ahead': (0,'int',0,35,'Beam struggles','Win early by leading by (inputs; 0 = off)'),
+    'beam_struggle_cpu_power_percent': (100,'int',25,200,'Beam struggles','CPU struggle strength (%; 100 = normal)'),
+    'beam_struggle_interference': (False,'bool',None,None,'Beam struggles','Others can hit fighters in a beam struggle'),
+    'beam_struggle_damage_penalty_percent': (200,'int',0,500,'Beam struggles','Push lost per health lost (%)'),
+    'beam_assist_enabled': (False,'bool',None,None,'Beam struggles','Teammates can assist a beam struggle (R3; 1 blast stock)'),
+    'beam_assist_multiplier_percent': (150,'int',110,300,'Beam struggles','Assist multiplier (push and final damage, %)'),
+    'beam_assist_cpu': (True,'bool',None,None,'Beam struggles','CPU fighters assist too'),
+    'beam_assist_range': (60,'int',30,150,'Beam struggles','Assist range from the struggling ally (world units)'),
+    # ground_locomotion (beta.37, v2 beta.38). Off installs nothing; the others only matter while it is on
+    # (ingame_settings DEPENDS). Speeds are % of a natural run (ground_locomotion RUN_BASE/WALK_BASE); tilt 0
+    # always runs; size scales the speed by the fighter's legs (ground_legs.py).
+    'ground_motion_style': ('classic','choice',('classic','natural','fighter'),None,'Movement','Walking and running style'),
+    'ground_running': (False,'bool',None,None,'Movement','Walk and run on the ground'),
+    'ground_walk_tilt_percent': (60,'int',0,95,'Movement','Stick tilt to run (%; 0 = always run)'),
+    'ground_walk_speed_percent': (40,'int',10,100,'Movement','Walking speed (% of normal)'),
+    'ground_run_speed_percent': (100,'int',50,150,'Movement','Running speed (%; 100 = normal)'),
+    'ground_size_speed': (True,'bool',None,None,'Movement','Size changes ground speed'),
 }
 DEFAULTS={key:row[0] for key,row in OPTIONS.items()}
 
@@ -101,6 +157,9 @@ DEFAULTS={key:row[0] for key,row in OPTIONS.items()}
 STEPS = {'coop_fusion_swap_seconds': 5,
     'hud_panel_scale_percent': 5, 'hud_panel_opacity_percent': 5,
     'lockoff_hold_seconds': 0.25,
+    'outnumbered_damage_bonus_percent': 5, 'outnumbered_damage_reduction_percent': 5,
+    'outnumbered_recovery_speed_percent': 10, 'outnumbered_getup_protection_seconds': 0.25,
+    'outnumbered_combo_breaker_hits': 1,
     'lockon_hold_seconds': 0.25, 'revive_stock_cost': 1, 'revive_channel_seconds': 0.25,
     'npc_transform_chance_percent': 5, 'training_health_delay_seconds': 0.25,
     'takeover_hint_seconds': 0.25, 'takeover_confirmation_seconds': 0.25,
@@ -110,6 +169,10 @@ STEPS = {'coop_fusion_swap_seconds': 5,
     'hud_damage_trail_seconds': 0.25, 'revive_radius': 5, 'revive_health_bars': 0.25,
     'revive_recovery_seconds': 0.25, 'revive_ring_opacity': 0.05, 'revive_ring_wave_height': 1,
     'revive_ring_wave_speed': 0.25,
+    'battle_camera_distance_percent': 5,
+    'beam_struggle_push_ahead': 5, 'beam_struggle_cpu_power_percent': 5, 'beam_struggle_damage_penalty_percent': 25,
+    'beam_assist_multiplier_percent': 10, 'beam_assist_range': 10,
+    'ground_walk_tilt_percent': 5, 'ground_walk_speed_percent': 5, 'ground_run_speed_percent': 5,
 }
 # Optional tighter (minimum, maximum) for the editors only. Saved values outside
 # it stay valid; a press moves them back inside.

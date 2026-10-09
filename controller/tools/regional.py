@@ -12,8 +12,16 @@ European disc (bt3-pal, SLES-54945), read from the European executable (research
 - GS VRAM: the 512-line frame, back and Z buffers end at block 0x3000 (USA 0x2A00) and every native texture
   bank moves +0x600 blocks (tbp). The mod's own texture zones that share the native layout move with them.
 - Disc files: the localised volumes insert files (native_map.FILE_ID); the English text set is file 455.
+
+Japanese disc (bt3-jpn, SLPS-25815 Sparking! Meteor), read from the Japanese executable and disc: the USA frame,
+VRAM and timing (NTSC, 448 lines, 60 Hz), but
+- its own volumes PZS3JP0-2 (native_map.FILE_ID) with a Japanese-only text set (file 450): the mod takes the
+  fighter names from bt3_english_names.json instead (TEXT_LANGUAGE 'ja');
+- its menus accept with Circle and go back with Cross (MENU_ACCEPT / MENU_BACK below), and its main-menu title
+  starts with the katakana Dragon Ball;
+- its game font has the ASCII letters but no accented Latin ones (NATIVE_FONT_ASCII).
 """
-from native_map import PAL, SERIAL, DISPLAY_H, Y_ORIGIN, VRAM_SHIFT, FILE_ID
+from native_map import PAL, JPN, SERIAL, DISPLAY_H, Y_ORIGIN, VRAM_SHIFT, FILE_ID
 
 NTSC_H = 448                         # the frame height every overlay was authored for
 SCREEN_H = DISPLAY_H                 # this disc's frame height (448 / 512)
@@ -74,10 +82,28 @@ def native_count(usa, pal):
 
 # ---- disc -------------------------------------------------------------------------------------------------
 ISO_NAME = ('Dragon Ball Z - Budokai Tenkaichi 3 (AU,EU) (En,Ja,Fr,De,Es,It) (2007) (Versus Fighting) (ISO) (PS2).iso'
-            if PAL else 'Dragon Ball Z - Budokai Tenkaichi 3 (USA) (En,Ja).iso')
-DISC_REGION = 'EU' if PAL else 'US'
+            if PAL else 'Dragon Ball Z - Sparking! Meteor (Japan).iso' if JPN
+            else 'Dragon Ball Z - Budokai Tenkaichi 3 (USA) (En,Ja).iso')
+DISC_REGION = 'EU' if PAL else 'JP' if JPN else 'US'
 AFS1 = f'/DATA/PZS3{DISC_REGION}1.AFS;1'
-ENGLISH_TEXT = FILE_ID(451)          # names, forms and portraits (package 1 entries 29..31): 451 / 455
+ENGLISH_TEXT = FILE_ID(451)          # names, forms and portraits (package 1 entries 29..31): 451 / 455 / 450
+# The language of that text set's names and forms. The Japanese set has kanji/kana names the mod's fonts cannot
+# draw: its English names come from bt3_english_names.json (english_names), its portraits from the disc.
+TEXT_LANGUAGE = 'ja' if JPN else 'en'
+ENGLISH_NAMES = 'bt3_english_names.json'
+
+
+def english_names():
+    """[(base name, form)] of the 161 BT3 fighters in English (bt3_english_names.json, made by
+    release_tools/build_english_names.py from the USA disc's text set; the roster order and IDs are the same on
+    every BT3 disc)."""
+    import json
+    from pathlib import Path
+    doc = json.loads((Path(__file__).resolve().parent / ENGLISH_NAMES).read_text(encoding='utf-8'))
+    rows = [(row['base_name'], row['form']) for row in doc['characters']]
+    if len(rows) != 161 or not all(base for base, _ in rows):
+        raise ValueError(f'{ENGLISH_NAMES} does not list the 161 BT3 fighters')
+    return rows
 
 
 def open_disc(iso_path):
@@ -104,6 +130,22 @@ def read_disc_file(iso_path, usa_file_id):
 # ---- language ---------------------------------------------------------------------------------------------
 # The first string of the main-menu text table (DBT, package 450/454 part 27). The European disc shows the
 # console's language: English, German and Italian start 'Dragon Ball Z', French too, Spanish with an inverted exclamation mark.
-# 16 bytes (8 UTF-16 units) read at the table's first string: the only prefixes the five languages use.
-MAIN_MENU_TITLES = (('\ufeffDragon ', '\ufeff\u00a1Dragon') if PAL else ('\ufeffDragon ',))
+# 16 bytes (8 UTF-16 units) read at the table's first string: the only prefixes the five languages use. The
+# Japanese table starts with the katakana Dragon Ball (FF FE C9 30 E9 30 B4 30 F3 30 DC 30 FC 30 EB 30).
+MAIN_MENU_TITLES = (('\ufeffDragon ', '\ufeff\u00a1Dragon') if PAL else
+                    ('\ufeff\u30c9\u30e9\u30b4\u30f3\u30dc\u30fc\u30eb',) if JPN else ('\ufeffDragon ',))
 MAIN_MENU_PREFIXES = tuple(title.encode('utf-16le') for title in MAIN_MENU_TITLES)
+# The game font draws the mod's main-menu descriptions (native_menu_assets.dbt). The Japanese font has the printable
+# ASCII letters but none of the accented Latin ones the Spanish texts use, so they are folded to ASCII there.
+NATIVE_FONT_ASCII = JPN
+
+
+# ---- menu buttons -----------------------------------------------------------------------------------------
+# The native menus read a decision word per pad (pad record +0x18C/+0x190, translated from the raw pad by 2574F0:
+# Circle 0x2000 -> 0x100, Cross 0x4000 -> 0x200, Triangle 0x1000 -> 0x400). The USA and European menus accept with
+# Cross (0x200) and go back with Triangle (0x400); the Japanese menus accept with Circle (0x100) and go back with
+# Cross (0x200): 207 + 33 decide and 108 + 3 cancel tests of the overlay and the executable moved that way. The
+# mod's pages inside the native main menu follow the disc: RAW_ACCEPT / RAW_BACK are the raw pad bits
+# (+0x148/+0x150) of the same two buttons.
+MENU_ACCEPT, MENU_BACK = (0x100, 0x200) if JPN else (0x200, 0x400)
+RAW_ACCEPT, RAW_BACK = (0x2000, 0x4000) if JPN else (0x4000, 0x1000)

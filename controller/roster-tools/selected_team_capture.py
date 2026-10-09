@@ -9,6 +9,7 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import struct
 from pathlib import Path
 
@@ -41,12 +42,23 @@ def selected_damage(row):
     return damaged
 
 
-def capture(ram, elf_path=ROOT/'analysis'/SERIAL_FILE, *, minimum_members=1):
+class ChosenElf(os.PathLike):
+    """The chosen game disc's executable (native_map.elf_path(ROOT)), resolved each time it is opened, never at
+    import: a process that imports this module before the disc is known still reads the right executable."""
+
+    def __fspath__(self):
+        return str(elf_path(ROOT))
+
+    def __repr__(self):
+        return 'ChosenElf()'
+
+
+def capture(ram, elf_path=ChosenElf(), *, minimum_members=1):
     """Return validated interleaved selection descriptors without modifying ram."""
     if type(minimum_members) is not int or minimum_members not in (1,2):
         raise ValueError('The captured minimum must be one native or two reserved members per side')
     if len(ram) != RAM_BYTES:
-        raise ValueError('Expected a full128MB EE RAM image for the isolated prototype runtime')
+        raise ValueError('Expected a full 128 MB EE RAM image for the isolated prototype runtime')
     u = lambda p: struct.unpack_from('<I', ram, p)[0]
     def require(condition, reason):
         if not condition: raise ValueError(reason)
@@ -57,7 +69,7 @@ def capture(ram, elf_path=ROOT/'analysis'/SERIAL_FILE, *, minimum_members=1):
     elf, _, readelf = elf_reader(Path(elf_path))
     for pointer, size in NATIVE_RANGES:
         require(ram[pointer:pointer + size] == readelf(pointer, size),
-                f'Native routine{pointer:08X} changed; capture requires a fresh ordinary two-actor match')
+                f'Native routine {pointer:08X} changed; capture requires a fresh ordinary two-actor match')
     require(u(REPLAY_FLAG) == 0, 'Replay playback cannot be used as a fresh team selection')
     manager = address(u(MANAGER_GLOBAL), 640, 'Actor manager')
     require(u(manager) == 2, 'Native actor manager must contain exactly two leaders')
@@ -69,8 +81,8 @@ def capture(ram, elf_path=ROOT/'analysis'/SERIAL_FILE, *, minimum_members=1):
         actor = actor_array + side * ACTOR_BYTES
         require(u(actor) == side and u(actor + 8) == side, f'Leader{side} has inconsistent native side identity')
         count, slot = u(actor + COUNT_OFFSET), u(actor + SLOT_OFFSET)
-        require(1 <= count <= 5, f'Team{side} must have between1 and5 selected members')
-        require(slot < count, f'Team{side} active slot is outside its selected roster')
+        require(1 <= count <= 5, f'Team {side} must have between 1 and 5 selected members')
+        require(slot < count, f'Team {side} active slot is outside its selected roster')
         require(slot == 0, f'Team{side} has already changed its active member; capture a fresh match before a KO/tag')
         model_id = u(actor + 12)
         require(model_id == side, f'Leader{side} must retain its native model slot')

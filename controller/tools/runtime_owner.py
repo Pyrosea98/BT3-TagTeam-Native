@@ -6,6 +6,8 @@ import time
 import psutil
 
 from fresh_team_trainer import acquire_lock
+# The process identity helpers live in process_identity (no game addresses): the Game disc backend uses them too.
+from process_identity import same_file, appimage_process  # noqa: F401 - re-exported
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTABLE = runtime_profile.EXECUTABLE
@@ -34,30 +36,6 @@ def claim(path=LOCK, timeout=3):
             time.sleep(.05)
 
 
-def same_file(first, second):
-    try:
-        return Path(first).resolve() == Path(second).resolve() or os.path.samefile(first, second)
-    except (OSError, TypeError, ValueError):
-        return False
-
-
-def appimage_process(process, executable):
-    """Linux: the launched PID runs the runtime's AppImage, then (same PID) PCSX2 from its mount.
-
-    Before the AppImage runtime execs AppRun, /proc/<pid>/exe is the AppImage itself. Afterwards
-    it is /tmp/.mount_*/usr/bin/pcsx2-qt, and the runtime's APPIMAGE variable names the file.
-    """
-    try:
-        exe = process.exe()
-        if exe and same_file(exe, executable):
-            return True
-        if os.path.basename(exe) != 'pcsx2-qt':
-            return False
-        return same_file(process.environ().get('APPIMAGE'), executable)
-    except psutil.AccessDenied:  # another user's process is never ours (an exited one: EmulatorClosed)
-        return False
-
-
 class EmulatorLifetime:
     def __init__(self, pid, executable=EXECUTABLE):
         try:
@@ -69,7 +47,7 @@ class EmulatorLifetime:
                 raise ValueError('The watcher requires its own isolated emulator process')
             self.created = self.process.create_time()
         except psutil.NoSuchProcess:
-            raise EmulatorClosed('The launcher emulator has closed.') from None
+            raise EmulatorClosed('PCSX2 was closed') from None
         # PINE's Unix-socket peer check compares the listener with this PID.
         self.pid = self.process.pid
         self.closed = False
@@ -84,7 +62,7 @@ class EmulatorLifetime:
             except psutil.NoSuchProcess:
                 self.closed = True
         if self.closed:
-            raise EmulatorClosed('The launcher emulator has closed; its watcher will exit.')
+            raise EmulatorClosed("PCSX2 was closed; the mod's helper stops with it")
 
     def revoke(self):
         self.closed = True

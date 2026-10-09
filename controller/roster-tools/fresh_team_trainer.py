@@ -20,7 +20,7 @@ import zipfile
 from pathlib import Path
 from codex_preparation_timing import timed, boundary
 
-from pine import PineClient
+from pine import PineClient, require_runtime
 from camera_snapshot import read_ram, publish, published, retract
 from state128 import read_entry
 import fresh_memory
@@ -58,9 +58,11 @@ import spectator_feedback
 import corpse_safety
 import display_settings
 import teammate_revive
+import outnumbered
 import extra_voice
 import npc_transform_policy
 import giant_options
+import battle_camera_zoom
 import viewport_hud
 import multi_contact
 import cinematic_policy
@@ -102,6 +104,9 @@ ROOT = Path(__file__).resolve().parents[1]
 STATES = runtime_profile.STATES
 PREFIX = f'{SERIAL} ({game_profile.pcsx2_crc()}).'
 ACK_ADDRESS = 0x073BFF00  # Reserved immutable stage token, outside game heaps.
+# An actor's native idle-update count. The idle handler (1EE968; PAL 1EED40) plays the idle taunt, action 67, once
+# it passes 90 (PAL 75): about 3 s of held idle. Seen live in the preparation hold (P-1).
+IDLE_COUNT = 0x3D8
 
 
 class ActiveRuntimeBudget:
@@ -164,6 +169,50 @@ def write_json(path, value):
     return path
 
 
+_OWNER = None
+
+
+def claim_owner():
+    """This process as the owner of a slot claim: its PID and start time, so a later process
+    that reuses the PID is not mistaken for it."""
+    global _OWNER
+    if _OWNER is None:
+        try:
+            import psutil
+            started = psutil.Process().create_time()
+        except Exception:  # noqa: BLE001 - psutil missing or refused: the PID alone
+            started = None
+        _OWNER = dict(pid=os.getpid(), started=started)
+    return dict(_OWNER)
+
+
+def owner_alive(owner):
+    """Is the process that wrote a slot claim still running? A claim with no owner (written
+    before beta.33) or an unreadable one has none that is."""
+    if not isinstance(owner, dict) or type(owner.get('pid')) is not int:
+        return False
+    if owner['pid'] == os.getpid():
+        return owner.get('started') == claim_owner()['started']
+    if owner.get('started') is None:
+        return False
+    try:
+        import psutil
+        return abs(psutil.Process(owner['pid']).create_time()-owner['started']) < .01
+    except Exception:  # noqa: BLE001 - gone, reused by another user's process, or no psutil
+        return False
+
+
+def write_claim(path, value):
+    """Replace a slot claim atomically: a crash leaves the old claim or the new one, never half."""
+    partial = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.partial')
+    try:
+        partial.write_text(json.dumps(value, indent=2)+'\n')
+        os.replace(partial, path)
+    except BaseException:
+        partial.unlink(missing_ok=True); raise
+    return path
+
+
 def merge_manifests(*items):
     blocks = []
     for item in items:
@@ -212,7 +261,7 @@ def _compose(ram, builders):
             for b in manifest['blocks']:
                 address = b['address']; old = bytes.fromhex(b['expected_hex'])
                 if current[address:address+len(old)] != old:
-                    raise ValueError(f'Virtual stage guard mismatch at{address:08X}')
+                    raise ValueError(f'Virtual stage guard mismatch at {address:08X}')
             spans = []
             for b in manifest['blocks']:
                 address = b['address']; data = bytes.fromhex(b['data_hex'])
@@ -253,7 +302,7 @@ def actor_config(ram, mode, selection=None, battle_mode='teams', humans=1, assig
 
 
 def final_team_manifest(ram, activation, source, play_intro=False, pause_others=True, pause_mode=None, present_mask=None,
-                        settings=None, battle_mode='teams', humans=1, assignment=None):
+                        settings=None, battle_mode='teams', humans=1, assignment=None, mission=None):
     """Compose all playability guards before exposing the first ready frame."""
     training=battle_mode in ('training','training_coop')
     if training:battle_mode='coop' if battle_mode=='training_coop' else 'teams'
@@ -311,7 +360,7 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
     # would otherwise switch targets with.
     builders.append(lambda r: spectator_switch.build_memory(r, source=source))
     builders.append(lambda r: team_participation.build_memory(r, present_mask=present_mask, source=source))
-    builders.append(lambda r: fusion_partner_lifecycle.build_memory(r, source=source, allow_human_partner=(battle_mode=='coop'),human_mask=human_extras if humans>=3 or assignment is not None else 0))
+    builders.append(lambda r: fusion_partner_lifecycle.build_memory(r, source=source, enabled=preferences['fusion_enabled'], allow_human_partner=(battle_mode=='coop'),human_mask=human_extras if humans>=3 or assignment is not None else 0))
     builders.append(lambda r: special_camera_arbitration.build_memory(r, source=source))
     builders.append(lambda r: special_concurrency.build_memory(r, source=source))
     builders.append(lambda r: ordinary_form_admission.build_memory(r, source=source))
@@ -342,6 +391,13 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
     hud_partner=battle_mode_policy.COOP_HUMANS[1] if battle_mode=='coop' else 1
     builders.append(lambda r: hud_subject.build_memory(r, source=source, partner=hud_partner, enhanced=True))
     builders.append(lambda r: stage_transition.build_memory(r, source=source))
+    import cinematic_position
+    builders.append(lambda r: cinematic_position.build_memory(r,settings=preferences,source=source))
+    import cinematic_position_camera
+    builders.append(lambda r: cinematic_position_camera.build_memory(r,settings=preferences,source=source))
+    # Walk and run on the ground (beta.37): the clip decoder and actions 13/14; off adds nothing.
+    import ground_locomotion
+    builders.append(lambda r: ground_locomotion.build_memory(r, settings=preferences, source=source))
     # Ten fighters leave two of the twelve model slots for summoned and
     # cosmetic models; when they run out, the move goes without its model.
     builders.append(lambda r: model_slot_guards.build_memory(r, source=source))
@@ -357,12 +413,15 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
         builders.append(lambda r: extra_intros.build_memory(r,source=source,settings=preferences,present_mask=present_mask))
     builders.append(lambda r: npc_transform_policy.build_memory(r, settings=preferences, source=source))
     builders.append(lambda r: giant_options.build_memory(r, settings=preferences, source=source))
+    builders.append(lambda r: battle_camera_zoom.build_memory(r, settings=preferences, source=source))
     builders.append(lambda r: viewport_hud.build_memory(r, source=source, settings=preferences))
     builders.append(lambda r: spectator_feedback.build_memory(r, source=source, settings=preferences))
     builders.append(lambda r: corpse_safety.build_memory(r, settings=preferences, source=source))
     builders.append(lambda r: dash_contact_guard.build_memory(r, source=source))
     builders.append(lambda r: display_settings.build_memory(r, settings=preferences, source=source))
     builders.append(lambda r: teammate_revive.build_memory(r, settings=preferences, source=source))
+    # Outnumbered help chains the kill-feed damage slot and the per-update call; preset Off adds nothing.
+    builders.append(lambda r: outnumbered.build_memory(r, settings=preferences, source=source))
     import body_swap_worker
     builders.append(lambda r: body_swap_worker.prepare_memory(r, settings=preferences, source=source))
     if training:
@@ -373,6 +432,10 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
     import power_scale_fusion_recipes, fusion_input_trace
     builders.append(lambda r: power_scale_fusion_recipes.build_memory(r, source=source))
     builders.append(lambda r: fusion_input_trace.build_memory(r, source=source))
+    # Beam struggle options: after kill feed, retaliation, beam/dash clash, viewport HUD and revival, whose
+    # programs it extends. All-legacy settings add nothing.
+    import beam_struggle
+    builders.append(lambda r: beam_struggle.build_memory(r, settings=preferences, source=source))
     import buu_ultimate_fanout
     builders.append(lambda r: buu_ultimate_fanout.build_memory(r, enabled=False,krillin_enabled=False, source=source))
     import inactive_actor_guard
@@ -380,6 +443,8 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
     if humans>=3 or assignment is not None:
         import four_player_mode
         builders.append(lambda r: four_player_mode.build_memory(r,mode=battle_mode,humans=humans,source=source,settings=preferences,assignment=assignment))
+    import tournament_ringout
+    builders.append(lambda r: tournament_ringout.build_memory(r, settings=preferences, source=source))
     import rush_cinematics
     builders.append(lambda r: rush_cinematics.build_memory(r, enabled=preferences['rush_cinematics']))
     import lockoff_target
@@ -390,6 +455,20 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
     if not training:
         import cpu_fusion_choice
         builders.append(lambda r: cpu_fusion_choice.build_memory(r, source=source))
+    # Hooks lock-off's INPUT/APPLY entries; all-legacy settings add nothing.
+    import lockon_select
+    builders.append(lambda r: lockon_select.build_memory(r,settings=preferences,source=source))
+    if mission is not None:
+        import story_runtime
+        if training or battle_mode != 'teams':
+            raise ValueError('Custom missions use Modded Team Battle, not training or free-for-all')
+        if (any(f.get('transformations') for f in mission['fighters']) or any(p['transform_chance'] < 100 for p in mission.get('cpu_profiles',{}).values()) or
+                any(a['type']=='transform' for e in mission['events'] for a in e['actions'])):
+            builders.append(lambda r: npc_transform_policy.build_memory(r,settings=preferences,source=source,force=True))
+        builders.append(lambda r: story_runtime.build_memory(r,mission,source=source))
+    # Wraps those entries, the damage accumulator and the overhead-bar call again, so it is the last builder.
+    import lockon_threat
+    builders.append(lambda r: lockon_threat.build_memory(r,settings=preferences,source=source))
     import localization
     localization.pin_battle(preferences)
     with localization.using(preferences):
@@ -407,6 +486,17 @@ def final_team_manifest(ram, activation, source, play_intro=False, pause_others=
         except ValueError:agrees=False
         del composed
         return manifest if agrees else compose_manifests(ram, builders)
+
+
+# Every earlier session leaves its recorded slots behind (a closed PCSX2 included), so this is routine, not a fault.
+SLOTS_REUSED = 'Reused savestate slot(s) {slots} left by an earlier session.'
+# The start wait counts only running time, so a timeout there cannot mean a paused PCSX2: the game stopped
+# drawing (its render observer, capacity_stage CONTROL+16, stood still). Seen live: $gp corrupted mid-intro.
+START_FROZE = ('The game stopped responding while the match was starting: its picture did not change for 10 seconds. '
+               'Close PCSX2, then start {play} again.')
+START_STALL_SECONDS = 10   # the number in START_FROZE (a translated sentence, not a template value)
+SLOTS_FULL = ('Need two free savestate slots between 220 and 239 in {folder}, but the others hold savestates this mod '
+              'did not create, which it never overwrites. Move those files out of that folder, then start {play} again')
 
 
 class Session:
@@ -446,7 +536,7 @@ class Session:
             self.run.mkdir()
             self.reserve_slots()
             write_json(self.run/'session.json', dict(mode=mode, settings=self.settings, slots=[s for s,_ in self.slots],
-                                                   status='preparing', original=None))
+                                                   status='preparing'))
         except BaseException:
             self.close(); raise
 
@@ -463,22 +553,46 @@ class Session:
             return None
 
     def reserve_slots(self):
+        """Claim two of savestate slots 220..239 for this run, under the exclusive trainer lock.
+
+        Every *.trainer-claim.json is the trainer's own (PCSX2's menus cannot save to these
+        slots) and names the process that wrote it. A claim whose process is gone was left by
+        an interrupted session (a closed emulator, a killed watcher, a crash): its slot is
+        taken over and its stale state file dropped (W1/F1). A live process's claim is reused
+        only with a verified receipt, as before. A state file without any claim is someone
+        else's and is never touched; neither are 218/219 or any slot outside this range.
+        """
         STATES.mkdir(parents=True, exist_ok=True)
+        reclaimed = []
         for slot in range(220, 240):
             path = STATES/f'{PREFIX}{slot:02}.p2s'; claim = path.with_suffix('.trainer-claim.json')
             if claim.exists():
-                data = self.reusable_claim(slot, path, claim)
-                if data is None: continue
-                data.update(run=str(self.run), slot=slot)
-                write_json(claim, data)
+                try: owner = json.loads(claim.read_text()).get('owner')
+                except (OSError, ValueError, AttributeError): owner = None
+                if owner_alive(owner):
+                    data = self.reusable_claim(slot, path, claim)
+                    if data is None: continue
+                else:
+                    try: path.unlink(missing_ok=True)
+                    except OSError: continue
+                    data = {}; reclaimed.append(slot)
+                data.update(run=str(self.run), slot=slot, owner=claim_owner())
+                try: write_claim(claim, data)
+                except OSError: continue
             else:
                 if path.exists(): continue
                 try:
-                    with claim.open('x') as f: json.dump(dict(run=str(self.run), slot=slot), f)
+                    with claim.open('x') as f: json.dump(dict(run=str(self.run), slot=slot, owner=claim_owner()), f)
                 except FileExistsError: continue
             self.slots.append((slot, path)); self.claims.append(claim)
-            if len(self.slots) == 2: return
-        raise ValueError('Need two unused or verified trainer-owned slots in220..239; foreign states are preserved')
+            if len(self.slots) == 2: break
+        import localization
+        from native_preparation import launcher
+        if reclaimed:
+            print(localization.tr(SLOTS_REUSED, slots=', '.join(map(str, reclaimed))), flush=True)
+        if len(self.slots) == 2: return
+        # Already in the player's language: the folder is part of the sentence, so it has no fixed key.
+        raise ValueError(localization.tr(SLOTS_FULL, folder=STATES, play=launcher()))
 
     def check_slot(self, index):
         slot, path = self.slots[index]; claim = self.claims[index]
@@ -486,15 +600,20 @@ class Session:
         if data.get('run') != str(self.run) or data.get('slot') != slot:
             raise ValueError('Preparation slot ownership changed')
         if path.exists() and self.reusable_claim(slot, path, claim) is None:
-            raise ValueError(f'Slot{slot} changed outside this trainer; preserving it')
+            raise ValueError(f'Slot {slot} changed outside this trainer; preserving it')
+        # The caller writes this slot next; close() frees it unless record_slot receipts it
+        # again. An earlier receipt of this run no longer describes the file (W1).
+        self._written = getattr(self, '_written', set()) | {index}
+        self._recorded = getattr(self, '_recorded', set()) - {index}
         return slot, path
 
     def record_slot(self, index, archive):
         slot, path = self.slots[index]
         state_hash = digest(path)
         if state_hash != digest(archive): raise ValueError('Runtime state and retained checkpoint differ')
-        write_json(self.claims[index], dict(run=str(self.run), slot=slot,
-            archive=str(Path(archive).resolve()), state_sha256=state_hash))
+        write_claim(self.claims[index], dict(run=str(self.run), slot=slot,
+            archive=str(Path(archive).resolve()), state_sha256=state_hash, owner=claim_owner()))
+        self._recorded = getattr(self, '_recorded', set()) | {index}
 
     def close(self):
         if getattr(self, '_prepared_success', False) and not self.settings['keep_preparation_diagnostics']:
@@ -509,11 +628,16 @@ class Session:
                     if path.resolve().parent==run and path.suffix=='.bin' and path.exists() and path.stat().st_size==0x8000000:
                         path.unlink()
                 except OSError as error:print(f'Could not remove temporary preparation image: {error}',flush=True)
-        # Empty claims need not consume slots after an early validation failure.
-        for (_, path), claim in zip(getattr(self, 'slots', []), getattr(self, 'claims', [])):
+        # Free every slot this run claimed but did not record (W1/F1): its state file is
+        # scratch this run wrote (or none). An earlier receipt this run did not write over
+        # stays as it is. Recorded slots keep their receipts.
+        recorded, written = getattr(self, '_recorded', set()), getattr(self, '_written', set())
+        for index, ((_, path), claim) in enumerate(zip(getattr(self, 'slots', []), getattr(self, 'claims', []))):
+            if index in recorded: continue
             try:
                 data = json.loads(claim.read_text())
-                if not path.exists() and data.get('run') == str(self.run) and 'archive' not in data: claim.unlink()
+                if data.get('run') != str(self.run) or ('archive' in data and index not in written): continue
+                path.unlink(missing_ok=True); claim.unlink()
             except (OSError, ValueError): pass
         if getattr(self, 'lock', None) is not None:
             self.lock.close(); self.lock = None
@@ -561,16 +685,18 @@ class Session:
     def snapshot(self, label, require_running=True):
         slot, path = self.check_slot(0)
         before = path.stat().st_mtime_ns if path.exists() else None
-        with self.client(require_running) as p: p.save_state(slot)
+        # A pause right before the save waits for the player instead of failing (F2).
+        with (self.running_client() if require_running else self.client(False)) as p: p.save_state(slot)
         deadline = time.monotonic()+30
         while time.monotonic() < deadline:
             time.sleep(.1)
+            require_runtime()   # a closed emulator ends this file wait at once (W1)
             try:
                 stat = path.stat()
                 if stat.st_mtime_ns == before: continue
                 with zipfile.ZipFile(path) as z:
                     if z.getinfo('eeMemory.bin').file_size != 0x8000000:
-                        raise ValueError('The running emulator must have128MB EE memory enabled')
+                        raise ValueError('The running emulator must have 128 MB EE memory enabled')
                 target = self.run/f'{self.index:02}-{label}.p2s'
                 partial = self.run/f'.{self.index:02}-{label}-{uuid.uuid4().hex}.partial'
                 with path.open('rb') as source, partial.open('xb') as dest:
@@ -652,7 +778,9 @@ class Session:
 
     @timed
     def wait_word(self, address, expected, label, timeout=120):
-        print(label, flush=True)
+        import localization
+        print(localization.tr(label), flush=True)   # the player's language; failure reports keep the English step
+        self.stage = label
         budget = ActiveRuntimeBudget(timeout)
         while True:
             with self.client(False) as p:
@@ -663,18 +791,39 @@ class Session:
                     desc,model,cid,field,actual,wanted = struct.unpack('<6I',p.read(address+64,24))
                     detail = f'; character{cid} model{model:08X} descriptor{desc:08X} field{field} actual{actual:08X} expected{wanted:08X}'
             if running and value == expected: return
-            if value >= 100: raise RuntimeError(f'{label}: guest status{value} at{address:08X}{detail}')
+            if value >= 100:
+                # Plain words keyed by the step: one status number means different things in different steps.
+                reasons = {'Preparing expanded game memory...': {101: 'PCSX2 did not give the game its extra memory',
+                                                                 102: 'PCSX2 did not give the game its extra memory',
+                                                                 None: 'The expanded game memory could not be prepared'},
+                           'Loading selected character resources...': {None: "A selected fighter's files could not be loaded from the disc"},
+                           'Creating independent fighters...': {150: 'There are not enough model or drawing slots for this roster',
+                                                                151: 'There are not enough model or drawing slots for this roster',
+                                                                152: 'There are not enough model or drawing slots for this roster',
+                                                                160: 'The game ran out of expanded memory for this roster',
+                                                                161: 'The game ran out of expanded memory for this roster',
+                                                                None: 'A selected fighter could not be created'},
+                           'Expanding graphics buffers...': {None: 'The graphics buffers could not be expanded'},
+                           'Initializing individual NPCs...': {None: 'The CPU fighters could not be set up'}}.get(label, {})
+                reason = reasons.get(value, reasons.get(None, 'A setup step reported an error'))
+                raise RuntimeError(f'{reason} (step "{label}", guest status {value} at {address:08X}){detail}')
             if budget.expired: break
             time.sleep(.2)
-        raise TimeoutError(f'{label}: guest did not finish within{timeout}seconds')
+        raise TimeoutError(f'{label}: the game did not finish this step within {timeout} seconds')
 
     @timed
     def prepare(self):
         self.progress('Preparing team battle', 0)
-        print(f'Capturing a fresh idle team match with up to {battle_mode_policy.TEAM_CAPACITY} fighters per side. You may start with the game paused.', flush=True)
+        if not isinstance(self, StreamingSession):   # the native-frame path needs the game running
+            print(f'Capturing a fresh idle team match with up to {battle_mode_policy.TEAM_CAPACITY} fighters per side. You may start with the game paused.', flush=True)
         ram = self.snapshot('original-selected-match', require_running=False)
-        minimum_members=2 if battle_mode_policy.prepare_singleton(self.battle_mode,self.humans) else 1
+        import story_missions
+        mission=story_missions.armed() if self.battle_mode == 'teams' else None
+        minimum_members=2 if mission is not None or battle_mode_policy.prepare_singleton(self.battle_mode,self.humans) else 1
         selection = capture(ram,minimum_members=minimum_members)
+        if mission is not None:
+            import story_runtime
+            mission=story_runtime.validate_selection(mission,selection,ram,self.humans,self.assignment)
         if self.battle_mode in ('coop','training_coop') or self.humans>=3 or self.assignment is not None:
             battle_mode_policy.validate_roster('coop' if self.battle_mode=='training_coop' else 'teams' if self.battle_mode=='training' else self.battle_mode,2*selection['members_per_side'],
                                                selection['participation_mask'],self.humans,self.assignment)
@@ -722,7 +871,7 @@ class Session:
         self.wait_word(ai.CONTROL, 5, 'Initializing individual NPCs...')
         # Native Power Scale can change a leader's action during the setup frames.
         # Wait for actual idle before taking the held image used by placement.
-        self.wait_idle_leaders()
+        self.wait_idle_leaders(actors=[row['actor'] for row in config['actors']])
         # snapshot() returns exactly the image it stored at ram_path.
         ram = self.snapshot('ai-ready')
         self.progress('Getting ready', 5)
@@ -733,8 +882,10 @@ class Session:
         # Install every dependent quality patch before the first exposed frame.
         final = final_team_manifest(ram, activation, self.source, play_intro=self.play_intro,
             pause_mode=self.settings[mod_settings.MODE_KEY], present_mask=selection['participation_mask'],
-            settings=self.settings, battle_mode=self.battle_mode, humans=self.humans,assignment=self.assignment)
+            settings=self.settings, battle_mode=self.battle_mode, humans=self.humans,assignment=self.assignment,mission=mission)
         self.install(final, 'complete-team')
+        if mission is not None:
+            write_json(self.run/'mission.json',mission)
         self.wait_word(extra_ground_effects.CONTROL, 5, 'Preparing dust and terrain effects...')
         self.wait_word(extra_generic_effects.CONTROL, 5, 'Preparing each fighter\'s cosmetic effects...')
         self.wait_word(extra_extended_auras.CONTROL, 5, 'Preparing afterimages and giant auras...')
@@ -749,14 +900,26 @@ class Session:
         # the data-only start signal. No save or reload occurs after uncovering.
         self.progress('Ready', 6)
         self.release_start()
-        write_json(self.run/'session.json', dict(mode=self.mode, battle_mode=self.battle_mode, humans=self.humans,assignment=self.assignment,
+        if mission is not None:
+            try:story_missions.consumed(mission)
+            except (OSError,ValueError,KeyError) as error:
+                # The world is already running. A concurrently edited queue
+                # must not tear down its healthy reload/camera services.
+                print(f'Warning: match started, but the queued story mission could not be cleared: {error}',flush=True)
+        status = dict(mode=self.mode, battle_mode=self.battle_mode, humans=self.humans,assignment=self.assignment,
             settings=self.settings, slots=[s for s,_ in self.slots],
-            status='active', playable_state=str(self.source), original=str(next(self.run.glob('*original-selected-match.*')))))
+            status='active', playable_state=str(self.source))
+        # Only a retained original checkpoint is named (F9): the state-load path keeps its
+        # .p2s; a streaming run's original image is scratch that compaction removes.
+        original = next(self.run.glob('*original-selected-match.p2s'), None)
+        if original is not None: status['original'] = str(original)
+        write_json(self.run/'session.json', status)
         print(f'Team activated. Restart checkpoint: {self.source}', flush=True)
         print('The automatic launcher handles rematches. For manual sessions, reload this checkpoint to restart.', flush=True)
         self._prepared_success=True
 
     def progress(self, label, completed):
+        self.stage = label  # the step a failure report names
         boundary(self,f'{completed}:{label}')
         if self.progress_callback is not None: self.progress_callback(label, completed, 6)
 
@@ -818,9 +981,11 @@ class Session:
         print(f'Prepared start: mode={getattr(self,"battle_mode","teams")} humans={getattr(self,"humans",1)} waiting for {"intro" if self.play_intro else "match"} acknowledgement (active budget {budget.seconds}s)',flush=True)
         accepted_notified = False
         accepted_heartbeat = 0.0
+        stall, heartbeat = ActiveRuntimeBudget(START_STALL_SECONDS), None
         while True:
             with self.client(False) as p:
-                budget.observe(p.status())
+                status = p.status()
+                budget.observe(status)
                 if (p.read_u32(A(0x2FEB14))!=manager or p.read(ACK_ADDRESS,16)!=marker or
                         p.read_u32(team_start_gate.CONTROL+8)!=manager or
                         p.read_u32(team_start_gate.CONTROL+12)!=count or
@@ -855,6 +1020,15 @@ class Session:
                 if released:
                     print(f'Prepared start acknowledged after {budget.elapsed:.3f}s observed running',flush=True)
                     return
+                # Only a render observer that is installed and counting (as the watcher's freeze watch).
+                counting = (p.read_u32(render.cap.CONTROL) == render.cap.MAGIC and p.read_u32(render.cap.CONTROL+48) == 1)
+                beat = p.read_u32(render.cap.CONTROL+16) if counting else None
+            if beat is None or beat != heartbeat:
+                stall, heartbeat = ActiveRuntimeBudget(START_STALL_SECONDS), beat
+            stall.observe(status)
+            if stall.expired:
+                from native_preparation import launcher
+                raise RuntimeError(START_FROZE.format(play=launcher()))
             if budget.expired: break
             time.sleep(.1)
         if getattr(self,'native_runtime',False):
@@ -871,12 +1045,18 @@ class Session:
                 if running and p.read_u32(address) >= minimum: return
             if budget.expired: break
             time.sleep(.2)
-        raise TimeoutError(f'No expected game-frame progress at{address:08X}')
+        raise TimeoutError(f'No expected game-frame progress at {address:08X}')
 
-    def wait_idle_leaders(self):
+    def wait_idle_leaders(self, actors=None):
         # The match-start pose can briefly change11 to67 after loading. Short
         # two-resource queues can finish during that pose; creation requires
         # genuine idle, not merely zero input. Keep the preparation hold intact.
+        # actors (P-1): every captured fighter, right before the image spawn placement is built from (its guest
+        # check, error 102, reads the same pose about a second later). A held fighter plays the idle taunt 67
+        # (IDLE_COUNT) for about 2.6 s: wait it out, then restart every idle count so no taunt starts before the
+        # placement runs. A fighter that never settles stops the setup with spawn_placement.NOT_IDLE.
+        if actors is not None and not all(0x100000 <= a < 0x8000000-0x1600 for a in actors):
+            raise AssertionError('Captured fighter addresses are outside game memory')   # an internal check (TTM-MATCH-06)
         budget = ActiveRuntimeBudget(30)
         while True:
             with self.client(False) as p:
@@ -887,12 +1067,18 @@ class Session:
                 if manager != p.read_u32(fresh_memory.CONTROL+84):
                     raise ValueError('Fresh preparation actor manager changed')
                 actor = p.read_u32(manager+4)
+                held = (actor, actor+0x1600) if actors is None else actors
                 if running and all(p.read_u32(a+0x948) == 11 and not any(p.read_u32(a+o)
                        for o in (0x1278, 0x127C, 0x1280, 0x1284))
-                       for a in (actor, actor+0x1600)):
+                       for a in held):
+                    if actors is not None:
+                        for a in held: p.write_u32(a+IDLE_COUNT, 0)
                     return
             if budget.expired: break
             time.sleep(.2)
+        if actors is not None:
+            from native_preparation import launcher
+            raise ValueError(spawn_placement.NOT_IDLE.format(play=launcher()))
         raise TimeoutError('Both held leaders did not return to idle for preparation')
 
 
@@ -907,7 +1093,8 @@ class StreamingSession(Session):
     @timed
     def snapshot(self,label,require_running=True):
         import native_preparation as native
-        with self.client() as p:
+        # A pause at a stage boundary waits for the player instead of failing (F2).
+        with self.running_client() as p:
             native.quiet(p)
             if label!='ready-held' or getattr(self,'native_runtime',False):
                 ram=native.read_ram(p)
@@ -990,7 +1177,7 @@ class StreamingSession(Session):
         manifest=merge_manifests(manifest,{'blocks':[dict(address=ACK_ADDRESS,
             expected_hex=expected_marker.hex(),data_hex=marker.hex())]})
         write_json(self.run/f'{self.index:02}-{label}.json',manifest);self.index+=1
-        with self.client() as p:
+        with self.running_client() as p:
             native.apply(p,manifest)
             if p.read(ACK_ADDRESS,16)!=marker:raise RuntimeError('Native stage marker was not committed')
             native.resume(p)
@@ -1005,16 +1192,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=('Original', 'Player', 'Cpu', 'TwoPlayer'), default='Original')
     args = parser.parse_args()
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        try: stream.reconfigure(errors='backslashreplace')
+        except (AttributeError, ValueError, OSError): pass
     session = None
     try:
         session = Session(args.mode)
         session.prepare()
-    except (OSError, ValueError, AssertionError, RuntimeError, TimeoutError) as error:
-        print(f'Preparation stopped: {error}', flush=True)
+    except Exception as error:  # noqa: BLE001 - every failure is explained, with its traceback kept
+        import traceback
+        import player_errors
+        stage = getattr(session, 'stage', None)
+        explanation = player_errors.explain(error, 'preparation', stage)
+        for line in player_errors.console_lines(explanation): print(line, flush=True)
+        traceback.print_exc()
         if session:
             originals = list(session.run.glob('*original-selected-match.p2s'))
             if originals: print(f'Restore the original checkpoint before retrying: {originals[0]}', flush=True)
-            write_json(session.run/'failure.json', dict(error=str(error)))
+            write_json(session.run/'failure.json', dict(error=explanation.detail, code=explanation.code, stage=stage,
+                                                        traceback=traceback.format_exc()))
         return 1
     finally:
         if session: session.close()

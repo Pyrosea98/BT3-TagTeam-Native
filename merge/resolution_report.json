@@ -1,0 +1,23 @@
+{
+ "resolved": [
+  "autopilot.py",
+  "controller_assignment.py",
+  "display_settings.py",
+  "extra_reload_forms.py",
+  "extra_reload_preload.py",
+  "extra_reload_worker.py",
+  "extra_special_pools.py",
+  "feature_preferences.py",
+  "fresh_team_trainer.py",
+  "fusion_partner_lifecycle.py",
+  "game_profile.py",
+  "guest_loading_screen.py",
+  "localization.py",
+  "mod_settings.py",
+  "native_mode_menu.py",
+  "quad_controller.py",
+  "quad_menu_input.py",
+  "team_assignment.py"
+ ],
+ "left_ours": []
+}

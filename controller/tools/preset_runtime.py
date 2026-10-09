@@ -165,12 +165,12 @@ def _run_owned(pid, status_file, lifetime, input_owner):
             # reconnect to a replacement opened on the same PINE endpoint.
             lifetime.require_alive()
             if operation_started:
-                report(f'Fighter update stopped: {error}. Close and reopen the launcher.', 'failed')
+                report(f'Fighter update stopped: {str(error).rstrip(".")}. Close PCSX2, then start {__import__("localization").entry("play") or "Play"} again.', 'failed')
                 return 1
             # Booting, closing or loading a checkpoint can briefly disconnect
             # read-only preflight. Retry before touching any guest transaction.
         except Exception as error:
-            report(f'Fighter update stopped: {error}. Close and reopen the launcher.', 'failed')
+            report(f'Fighter update stopped: {str(error).rstrip(".")}. Close PCSX2, then start {__import__("localization").entry("play") or "Play"} again.', 'failed')
             return 1
         time.sleep(fighter_updates.poll_delay(worker,body,fusion,.15))
 

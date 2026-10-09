@@ -1,12 +1,20 @@
 """Narrow, authenticated EE input mailbox transport for one PCSX2 process.
 
-PINE authenticates the mapping once. The input thread then touches only its
-owned mailbox, avoiding contention with character-resource PINE transactions.
-No executable pointer, emulator version offset, or process-wide scan is trusted.
+PINE authenticates the mapping once. The controller hub's thread then touches
+only its owned mailboxes, avoiding contention with character-resource PINE
+transactions. No emulator version offset is trusted.
 
-Windows reads the emulator with Read/WriteProcessMemory. Linux maps PCSX2's
-own EE memory file through /proc/<pid>/fd (see SharedMemoryMapping). Both
-routes accept a mapping only after the PINE-written token is found in it.
+Windows reads the emulator with Read/WriteProcessMemory. The EE base comes from
+PCSX2's exported data symbol EEmem (a pointer to EE RAM, exported by every
+PCSX2 runtime the mod supports): the main module's base plus the export's
+address gives the pointer in microseconds. Builds without the export fall back
+to a background VirtualQueryEx scan (BaseFinder; attach raises AttachPending
+until it finishes). Linux maps PCSX2's own EE memory file through
+/proc/<pid>/fd (see SharedMemoryMapping). Every route accepts a mapping only
+after the PINE-written token (and the mailbox identity) is found in it.
+
+One ProcessMemory per PCSX2 process is shared by every mailbox (shared_process)
+and closed once, by the hub at watcher exit (release_process).
 """
 import ctypes
 import errno
@@ -34,7 +42,26 @@ EE_SIZE=0x8000000
 SHARED_MEMORY=re.compile(r'\A/(?:.*/|memfd:)?pcsx2_(\d+) \(deleted\)\Z',re.S)
 
 
+# Group A's wording; player_errors translates it through its {play} template.
+ACCESS_REFUSED=('Controllers 3 and 4 cannot be read: Windows refused access to PCSX2. Do not run PCSX2 or Play '
+                'as administrator, then start {play} again.')
+
+
+def launcher():
+    """This installation's Play launcher (localization.entry, group A); plain 'Play' before it exists."""
+    try:
+        import localization
+        return localization.entry('play') or 'Play'
+    except Exception:  # noqa: BLE001 - a name inside a message only
+        return 'Play'
+
+
 class MappingLost(RuntimeError):pass
+
+
+class AttachPending(RuntimeError):
+    """The EE base is still being found in the background (builds without the EEmem export): try again on a later
+    watcher tick. Silent: never reported to the player."""
 
 
 class MailboxUnavailable(OSError):
@@ -55,11 +82,15 @@ class WindowsProcessMemory:
             'CloseHandle':([w.HANDLE],w.BOOL),
             'VirtualQueryEx':([w.HANDLE,ctypes.c_void_p,ctypes.POINTER(Region),ctypes.c_size_t],ctypes.c_size_t),
             'ReadProcessMemory':([w.HANDLE,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)],w.BOOL),
-            'WriteProcessMemory':([w.HANDLE,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)],w.BOOL)}
+            'WriteProcessMemory':([w.HANDLE,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)],w.BOOL),
+            'K32EnumProcessModulesEx':([w.HANDLE,ctypes.POINTER(ctypes.c_void_p),w.DWORD,ctypes.POINTER(w.DWORD),w.DWORD],w.BOOL),
+            'K32GetModuleFileNameExW':([w.HANDLE,ctypes.c_void_p,ctypes.c_wchar_p,w.DWORD],w.DWORD)}
         for name,(args,result) in signatures.items():
             fn=getattr(self.dll,name);fn.argtypes=args;fn.restype=result
         self.handle=self.dll.OpenProcess(0x438,False,pid)
-        if not self.handle:raise OSError(ctypes.get_last_error(),'Cannot open the owning emulator input mailbox')
+        # The Windows error goes in as winerror (5 = access denied), so its errno is EACCES and
+        # player_errors classifies it as refused access (NO-ACCESS), not an unexpected error.
+        if not self.handle:raise OSError(0,ACCESS_REFUSED.format(play=launcher()),None,ctypes.get_last_error())
 
     def read(self,address,size):
         buf=ctypes.create_string_buffer(size);count=ctypes.c_size_t()
@@ -71,6 +102,24 @@ class WindowsProcessMemory:
         buf=ctypes.create_string_buffer(data);count=ctypes.c_size_t()
         if not self.dll.WriteProcessMemory(self.handle,address,buf,len(data),ctypes.byref(count)) or count.value!=len(data):
             raise MappingLost('The emulator input mailbox is no longer writable')
+
+    def main_module(self):
+        """(base address, file path) of PCSX2's executable (module 0 of the process)."""
+        modules=(ctypes.c_void_p*1)();needed=w.DWORD()
+        if not self.dll.K32EnumProcessModulesEx(self.handle,modules,ctypes.sizeof(modules),ctypes.byref(needed),3) or not modules[0]:
+            raise OSError(ctypes.get_last_error(),'The PCSX2 executable module could not be listed')
+        buffer=ctypes.create_unicode_buffer(32768)
+        if not self.dll.K32GetModuleFileNameExW(self.handle,modules[0],buffer,len(buffer)):
+            raise OSError(ctypes.get_last_error(),'The PCSX2 executable path could not be read')
+        return modules[0],buffer.value
+
+    def ee_base(self):
+        """The EE RAM address from PCSX2's exported EEmem pointer, or None when this build does not export it."""
+        base,path=self.main_module()
+        rva=export_rva(path,'EEmem')
+        if rva is None:return None
+        pointer=struct.unpack('<Q',self.read(base+rva,8))[0]
+        return pointer or None
 
     def candidates(self):
         # PCSX2 maps EE pages individually into one allocation. Group by that
@@ -88,6 +137,42 @@ class WindowsProcessMemory:
 
     def close(self):
         if self.handle:self.dll.CloseHandle(self.handle);self.handle=None
+
+
+_exports={}   # (path, size, mtime) -> {name: rva} of an executable's export table
+
+
+def exports(path):
+    """{name: rva} of a PE file's export table (parsed once per path, size and modification time)."""
+    info=os.stat(path);key=(os.path.normcase(os.path.abspath(path)),info.st_size,info.st_mtime_ns)
+    if key in _exports:return _exports[key]
+    with open(path,'rb') as source:data=source.read()
+    result={}
+    pe=struct.unpack_from('<I',data,0x3C)[0]
+    if data[pe:pe+4]!=b'PE'+bytes(2):raise ValueError(f'{path} is not a Windows executable')
+    sections,optional=struct.unpack_from('<H',data,pe+6)[0],struct.unpack_from('<H',data,pe+20)[0]
+    header=pe+24;magic=struct.unpack_from('<H',data,header)[0]
+    directory,size=struct.unpack_from('<II',data,header+(112 if magic==0x20B else 96))
+    table=[struct.unpack_from('<8sIIII',data,header+optional+40*i)[1:] for i in range(sections)]
+    def offset(rva):
+        for virtual_size,virtual,raw_size,raw in table:
+            if virtual<=rva<virtual+max(virtual_size,raw_size):return rva-virtual+raw
+        raise ValueError(f'{rva:#x} lies outside every section of {path}')
+    if directory and size:
+        start=offset(directory)
+        functions,names,address_table,name_table,ordinals=struct.unpack_from('<IIIII',data,start+20)
+        for i in range(names):
+            text=offset(struct.unpack_from('<I',data,offset(name_table)+4*i)[0])
+            name=data[text:data.index(bytes(1),text)].decode('ascii','replace')
+            ordinal=struct.unpack_from('<H',data,offset(ordinals)+2*i)[0]
+            result[name]=struct.unpack_from('<I',data,offset(address_table)+4*ordinal)[0]
+    _exports[key]=result
+    return result
+
+
+def export_rva(path,name):
+    try:return exports(path).get(name)
+    except (OSError,ValueError,struct.error):return None
 
 
 class Liveness:
@@ -242,11 +327,65 @@ class SharedMemoryMapping:
 
 
 ProcessMemory=WindowsProcessMemory if os.name=='nt' else SharedMemoryMapping
+_shared={}        # (pid, factory) -> the one ProcessMemory of that PCSX2
+_finders={}       # (pid, factory) -> BaseFinder
+_shared_lock=threading.Lock()
+
+
+def shared_process(pid,factory=None):
+    """The ProcessMemory of PCSX2 process `pid`, opened once and shared by every mailbox (closed by release_process)."""
+    factory=factory or ProcessMemory
+    with _shared_lock:
+        process=_shared.get((pid,factory))
+        if process is None:process=_shared[(pid,factory)]=factory(pid)
+        return process
+
+
+def release_process(pid):
+    """Close every shared handle of `pid` once (Hub.close at watcher exit)."""
+    with _shared_lock:
+        owned=[key for key in _shared if key[0]==pid]
+        processes=[_shared.pop(key) for key in owned]
+        for key in [k for k in _finders if k[0]==pid]:_finders.pop(key)
+    for process in processes:
+        try:process.close()
+        except Exception:pass
+
+
+class BaseFinder:
+    """The VirtualQueryEx scan on a background thread, for PCSX2 builds without the EEmem export."""
+    def __init__(self,process):
+        self.process=process;self.result=None;self.error=None;self.done=threading.Event()
+        self.thread=threading.Thread(target=self._run,name='TTM EE base finder',daemon=True);self.thread.start()
+
+    def _run(self):
+        try:self.result=self.process.candidates()
+        except Exception as error:self.error=error
+        finally:self.done.set()
+
+
+def bases(process,pid,factory,*,wait=False):
+    """Where EE RAM may start in `process`: the EEmem pointer (Windows), the mapping (Linux), or the scan."""
+    base=getattr(process,'ee_base',None)
+    if base is not None:
+        try:found=base()
+        except (OSError,MappingLost):found=None
+        if found:return [found]
+    if wait or base is None:return process.candidates()
+    with _shared_lock:
+        finder=_finders.get((pid,factory))
+        if finder is None:finder=_finders[(pid,factory)]=BaseFinder(process)
+    if not finder.done.is_set():raise AttachPending('The emulator memory is still being located')
+    if finder.error is not None:
+        with _shared_lock:_finders.pop((pid,factory),None)
+        raise finder.error
+    return finder.result
 
 
 class Mailbox:
     TOKEN_ADDRESS=TOKEN
-    READS={quad.CONTROL:16,quad.core.ACTORS:4,quad.core.MODE:16}
+    CONTROL,MAILBOX=quad.CONTROL,quad.MAILBOX
+    READS={quad.CONTROL:16,quad.CONTROL+16:8,quad.core.ACTORS:4,quad.core.MODE:16}
     WRITES={quad.MAILBOX:64,quad.CONTROL+16:4,quad.CONTROL+28:4}
 
     def __init__(self,process,base,token):self.process,self.base,self.token=process,base,token
@@ -262,23 +401,23 @@ class Mailbox:
         return {quad.CONTROL:header,quad.core.MODE:expected_mode,quad.core.ACTORS:struct.pack('<I',manager)}
 
     @classmethod
-    def attach(cls,p,pid,process_factory=ProcessMemory):
+    def attach(cls,p,pid,process_factory=ProcessMemory,*,wait=False):
+        """Authenticate this mailbox in the shared process memory of `pid`. wait=True scans in place (tools, tests);
+        otherwise a build without EEmem raises AttachPending until its background scan is done."""
         identity=cls.identity(p)
         token=secrets.token_bytes(16);p.write(cls.TOKEN_ADDRESS,token)
-        process=process_factory(pid)
-        try:
-            matches=[]
-            for base in process.candidates():
-                try:
-                    if (process.read(base+cls.TOKEN_ADDRESS,16)==token and
-                            all(process.read(base+address,len(data))==data for address,data in identity.items())):
-                        matches.append(base)
-                except MappingLost:continue
-            if len(matches)!=1:
-                source=getattr(process,'source',None) # Linux names the memory file it searched.
-                raise ValueError(f'Expected one authenticated EE mapping, found {len(matches)}'+(f' in {source}' if source else ''))
-            return cls(process,matches[0],token)
-        except BaseException:process.close();raise
+        process=shared_process(pid,process_factory)
+        matches=[]
+        for base in bases(process,pid,process_factory,wait=wait):
+            try:
+                if (process.read(base+cls.TOKEN_ADDRESS,16)==token and
+                        all(process.read(base+address,len(data))==data for address,data in identity.items())):
+                    matches.append(base)
+            except MappingLost:continue
+        if len(matches)!=1:
+            source=getattr(process,'source',None) # Linux names the memory file it searched.
+            raise ValueError(f'Expected one authenticated EE mapping, found {len(matches)}'+(f' in {source}' if source else ''))
+        return cls(process,matches[0],token)
 
     def require_owner(self):
         if self.process.read(self.base+self.TOKEN_ADDRESS,16)!=self.token:
@@ -295,39 +434,7 @@ class Mailbox:
         self.require_owner();self.process.write(self.base+address,data)
 
     def write_u32(self,address,value):self.write(address,struct.pack('<I',value))
-    def close(self):self.process.close()
-
-
-class Service:
-    """SDL is created/polled/closed on its owning thread; no PINE in the loop."""
-    def __init__(self,mailbox,devices=(2,3),bridge_factory=quad.Bridge):
-        self.mailbox=mailbox;self.devices=devices;self.bridge_factory=bridge_factory
-        self.stop=threading.Event();self.ready=threading.Event();self.failure=None
-        self.thread=threading.Thread(target=self._run,name='BT3 controller input',daemon=True)
-        self.thread.start()
-        if not self.ready.wait(5):self.close();raise RuntimeError('Controller input initialization timed out')
-        if self.failure:self.close();raise RuntimeError(self.failure)
-
-    def _run(self):
-        bridge=None
-        try:
-            bridge=self.bridge_factory(devices=self.devices);self.ready.set()
-            while not self.stop.is_set():
-                if not bridge.poll(self.mailbox):break
-                self.stop.wait(.01)
-        except MappingLost:pass # Normal checkpoint/scene teardown; guest lease clears.
-        except Exception as error:self.failure=str(error)
-        finally:
-            if bridge is not None:bridge.close()
-            self.ready.set()
-
-    @property
-    def active(self):return self.thread.is_alive()
-
-    def close(self):
-        self.stop.set();self.thread.join(timeout=5)
-        if self.thread.is_alive():raise RuntimeError('Controller input thread did not stop')
-        self.mailbox.close()
+    def close(self):pass   # the process memory is shared (release_process closes it once)
 
 
 class Capability(NamedTuple):
@@ -366,21 +473,10 @@ def plain_reason(reason):
     return text or (type(reason).__name__ if isinstance(reason,BaseException) else 'no reason given')
 
 
-def check_sdl(timeout=5):
-    """SDL's game-controller input loads and initializes, on its own short thread."""
-    import input_binding
-    outcome=[]
-    def probe():
-        try:
-            # Foreground mode: the probe needs no pad numbering and must not log the
-            # device list the input thread logs. close() also quits SDL's subsystem.
-            input_binding.ControllerCapture().close()
-            outcome.append(None)
-        except BaseException as error:outcome.append(error)
-    thread=threading.Thread(target=probe,name='SDL capability probe',daemon=True)
-    thread.start();thread.join(timeout)
-    if not outcome:raise RuntimeError('SDL controller initialization timed out')
-    if outcome[0] is not None:raise outcome[0]
+def check_sdl(hub,timeout=5):
+    """SDL's game-controller input runs: the controller hub's reader is ready (it starts the hub if needed)."""
+    if hub is None:raise RuntimeError('The controller reader is not running')
+    hub.require_ready(timeout)
 
 
 def capability(p,pid,*,process_factory=None,sdl_check=None,ranges=PROBE_RANGES,samples=PROBE_SAMPLES,pause=.01):
@@ -392,7 +488,7 @@ def capability(p,pid,*,process_factory=None,sdl_check=None,ranges=PROBE_RANGES,s
     persists (stable and non-blank every time) says no, and that verdict is
     not lasting, because the running guest may have raced every sample.
     """
-    try:(sdl_check or check_sdl)()
+    try:(sdl_check or (lambda:check_sdl(None)))()
     except Exception as error:
         reason=str(error) # input_binding already names SDL2 and the package to install.
         return Capability(False,reason if 'SDL' in reason else f'SDL2 controller input is unavailable ({reason})')
@@ -419,13 +515,16 @@ def capability(p,pid,*,process_factory=None,sdl_check=None,ranges=PROBE_RANGES,s
 
 
 class Owner:
-    """One input thread per captured world; a rewind always gets a new token.
+    """Players 3 and 4 in a prepared match: one hub sink per captured world; a rewind always gets a new token.
+    No thread starts or ends here: the controller hub publishes (controller_hub.BattleSink).
 
     `report` receives a problem (the watcher shows it as a warning), `notice` the
-    recovery after a provisional "no" (defaults to `report`; both print when None)."""
-    def __init__(self,pid,*,report=None,notice=None):
-        self.pid=pid;self.service=None;self.capture=None;self.devices=(2,3);self.attached_devices=None
-        self.report=report;self.notice=notice
+    recovery after a provisional "no" (defaults to `report`; both print when None).
+    seats: 'private' (seats 3-4 of the check-in roster) or 'extras' (free controllers)."""
+    def __init__(self,pid,*,report=None,notice=None,hub=None):
+        self.mailbox_type=Mailbox
+        self.pid=pid;self.service=None;self.capture=None;self.seats='private';self.attached_seats=None
+        self.report=report;self.notice=notice;self.hub=hub
 
     def _tell(self,message,*,good=False):
         target=(self.notice or self.report) if good else self.report
@@ -442,10 +541,10 @@ class Owner:
         if not PROBE_REQUIRED:return True
         result=_capabilities.get(self.pid)
         if result is None:
-            key=(capture,tuple(self.devices));held=_provisional.get(self.pid)
+            key=(capture,self.seats);held=_provisional.get(self.pid)
             same=held is not None and held['key']==key
             if same and time.monotonic()<held['retry']:return False # Reported when first seen.
-            result=capability(p,self.pid)
+            result=capability(p,self.pid,sdl_check=lambda:check_sdl(self.hub))
             if result.available is False and not result.lasting:
                 step=held['step']+1 if same else 0
                 _provisional[self.pid]=dict(key=key,step=step,retry=time.monotonic()+PROBE_RETRY[min(step,len(PROBE_RETRY)-1)])
@@ -466,7 +565,7 @@ class Owner:
             if self.pid not in _reported:
                 _reported.add(self.pid)
                 self._tell(f'3-4 player input is unavailable on this system: {plain_reason(result.reason)}. Players 3 and 4, '
-                           "Player Setup's Assign controllers, and allowing all controllers during character selection, are off; "
+                           'their Player Setup check-in, and allowing all controllers during character selection, are off; '
                            'P1 and P2 keep their PCSX2 controllers.')
         elif self.pid not in _pending:
             _pending.add(self.pid)
@@ -475,19 +574,33 @@ class Owner:
                        'P1 and P2 keep their PCSX2 controllers.')
         return False
 
+    def sink(self,mailbox,capture):
+        import controller_hub
+        return controller_hub.BattleSink(mailbox,capture)
+
     def attach(self,p,capture,*,rewound=False):
         if quad.native_seat_pads():
             self.close()
-            self.capture=capture;self.attached_devices=self.devices
+            self.capture=capture;self.attached_seats=self.seats
             return # Native frame service authenticates the match and publishes pads.
         if self.service is not None:
             if self.service.failure:raise RuntimeError(self.service.failure)
-            if self.capture==capture and self.attached_devices==self.devices and not rewound and self.service.active:return
+            if self.capture==capture and self.attached_seats==self.seats and not rewound and self.service.active:return
         self.close()
         if p.read_u32(quad.CONTROL)!=quad.MAGIC:return
+        self.add(p,capture)
+
+    def add(self,p,capture):
         if not self.available(p,capture):return
-        self.service=Service(Mailbox.attach(p,self.pid),devices=self.devices);self.capture=capture;self.attached_devices=self.devices
+        if self.hub is None:raise RuntimeError('The controller reader is not running')
+        if self.hub.state=='failed':raise MailboxUnavailable(self.hub.failure or 'SDL controller input is unavailable')
+        self.hub.start()
+        sink=self.sink(self.mailbox_type.attach(p,self.pid),capture)
+        self.service=self.hub.add_sink(sink);self.capture=capture;self.attached_seats=self.seats
 
     def close(self):
-        if self.service is not None:self.service.close()
-        self.service=None;self.capture=None
+        # A hub that does not answer is dropped once, never asked again (F8).
+        try:
+            if self.service is not None:self.service.close()
+        finally:
+            self.service=None;self.capture=None

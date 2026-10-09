@@ -93,14 +93,14 @@ def admission(entry,base,old):
     result=a.finish();assert len(result)<0x400;return result
 
 
-def side_code(native_target=A(0x12B4F0)):
+def side_code(target=None):
     a=Assembler(SIDE);a.addiu(29,29,-0x40)
     for i,r in enumerate((4,8,9,10,11,12,13,31)):a.i(63,r,29,8*i)
     scope(a,'call')
     a.label('scan');a.lw(8,13);a.branch(4,8,16,'mapped') # native2033C8's s0 is its actor
     a.addiu(13,13,4);a.addiu(12,12,1);a.branch(5,12,11,'scan');a.jump('call')
     a.label('mapped');a.i(12,4,12,1)
-    a.label('call');a.call(native_target)
+    a.label('call');a.call(A(0x12B4F0) if target is None else target)
     for i,r in enumerate((4,8,9,10,11,12,13,31)):a.i(55,r,29,8*i)
     a.addiu(29,29,0x40);a.jr();return a.finish()
 

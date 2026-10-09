@@ -112,19 +112,22 @@ class Bridge(pads.Bridge):
 
 
 class Owner:
-    def __init__(self,pid):self.pid=pid;self.order=None;self.service=None;self.capture=None
+    def __init__(self,pid,hub=None):self.pid=pid;self.order=None;self.service=None;self.capture=None
 
     def assign(self,devices):
         self.close();self.order=order(devices) if devices is not None else None
 
-    def attach(self,p,capture):
+    def attach(self,p,capture,*,allow_arm=True,in_match=None,rewound=False):
         if pads.native_seat_pads():
             self.disable(p) # PadConfig owns P1/P2 directly; no physical SDL remapping.
+            return
+        if not allow_arm:
+            self.disable(p)
             return
         if self.order is None:return
         if self.service is not None:
             if self.service.failure:raise RuntimeError(self.service.failure)
-            if self.capture==capture and self.service.active:return
+            if self.capture==capture and self.service.active and not rewound:return
         self.close()
         # Disarm before staging data; arm only after the input thread is ready.
         p.write_u32(CONTROL+12,0)

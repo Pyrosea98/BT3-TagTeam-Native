@@ -274,7 +274,7 @@ def build_memory(ram, physical, character, costume=0, damaged=False, source='<of
     for p, size in (RANGE(0x2654D8, 0x58), (A(0x26B5E8), 0x38), (A(0x26AA40), 0x38),
                     (A(0x2554D8), 0x30), (A(0x255508), 0x68), (A(0x24B238), 0x60),
                     (A(0x2651C0), 0xD8), (A(0x265298), 0x180)):
-        if not native_io_helper_matches(ram, native, p, size): raise ValueError(f'Native loader/allocator changed:{p:08X}')
+        if ram[p:p+size] != native(p, size): raise ValueError(f'Native loader/allocator changed:{p:08X}')
     if any(ram[CODE:END]): raise ValueError('One-extra preloader reservation occupied')
     control = bytearray(256)
     for key in ('manager', 'actor', 'model', 'physical', 'old_resource', 'old_dataset', 'registry'):

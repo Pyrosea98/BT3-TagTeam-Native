@@ -5,6 +5,7 @@ owned copies of their texture descriptors and DMA payloads. Pixel data begins
 0x60 bytes into the native IMAGE packet; 0x80 causes displaced/corrupted glyphs.
 """
 from native_map import A
+from regional import NATIVE_FONT_ASCII
 from dataclasses import dataclass
 import hashlib
 from localization import tr
@@ -20,7 +21,7 @@ MAIN_OBJECT=A(0x3B0E80)
 NODE_STRIDE=0xE4
 LABEL_TABLE_INDICES={'off':8,'on':12}
 WIDTH,HEIGHT=512,256
-LABELS=('Team Battle','Free-for-all','Co-op','Modded Training',
+LABELS=('Team Battle','Free-for-all','Modded Scenarios','Modded Training',
         '1 Player','2 Players','Mod Settings','Back')
 NATIVE_ROW_LAYOUTS=((0,1,2,3,5,6,7,8,9),(0,1,2,3,5,6,7,8,9,10))
 
@@ -217,7 +218,7 @@ def clone(ram,source,destination,indices):
 DESCRIPTIONS = (
     ('Fight with every selected teammate\non the battlefield at the same time.',
      'Every fighter is an opponent.\nChoose one to four players, or CPUs.',
-     'Two to four players share Team 1.\nSelect an ally for every human player.',
+     'Play saved story battles.\nFighters are selected automatically.',
      'Practice with selected team rosters.\nSet CPU behavior and refill in Mod settings.\nOriginal Training stays in the original menu.', '', '', 'Adjust the mod with your controller.\nSave changes for your next match.', ''),
     ('', '', '', '',
      'Control Team 1 against CPU opponents.\nChoose the fighters for each team.',
@@ -238,6 +239,17 @@ DESCRIPTIONS = (
      'Return to the mod mode groups.'))
 
 
+def native_text(text):
+    """The mod's own text as the game font can draw it. The Japanese font has the printable ASCII letters but no
+    accented Latin ones: Spanish accents fold to their base letter there (inverted marks to plain ones)."""
+    if not NATIVE_FONT_ASCII:
+        return text
+    import unicodedata
+    text = text.replace('\u00bf', '?').replace('\u00a1', '!').replace('\u00ab', '"').replace('\u00bb', '"')
+    folded = ''.join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c))
+    return ''.join(c if c == '\n' or 32 <= ord(c) < 127 else '?' for c in folded)
+
+
 def dbt(strings):
     """Native DBT offset table: UTF-16 BOM strings aligned to 64 bytes."""
     out=bytearray((4+4*len(strings)+63)&~63)
@@ -251,7 +263,7 @@ def dbt(strings):
 
 def descriptions(ram,obj,button='Select',show_hint=True,settings=None):
     hint='['+button+']: '+tr('Original game menu',settings) if show_hint else ''
-    custom=dbt([tr(text,settings)+('\n'+hint if hint else '') for page in DESCRIPTIONS for text in page])
+    custom=dbt([native_text(tr(text,settings)+('\n'+hint if hint else '')) for page in DESCRIPTIONS for text in page])
     source=u32(ram,obj+8)
     if u32(ram,source)!=64 or u32(ram,source+4)!=0x140:
         raise ValueError('Native main-menu DBT changed')
@@ -262,7 +274,7 @@ def descriptions(ram,obj,button='Select',show_hint=True,settings=None):
         end=next((j for j in range(0,len(raw)-1,2)if raw[j:j+2]==b'\0\0'),None)
         if end is None:raise ValueError('Unterminated native menu text')
         text=raw[:end].decode('utf-16le').lstrip('\ufeff')
-        if show_hint:text+='\n['+button+']: '+tr('Mod modes',settings)
+        if show_hint:text+=native_text('\n['+button+']: '+tr('Mod modes',settings))
         strings.append(text)
     return custom,dbt(strings)
 

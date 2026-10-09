@@ -1,9 +1,10 @@
 """Four-seat input transport for prepared three/four-human matches.
 
-P1/P2 retain PCSX2's existing mappings. P3/P4 use private native-format pad
-records, published at a game-frame boundary. A short guest lease neutralizes
-held buttons if the host stops, a controller disconnects, or the match changes.
-Installed only for three/four-player modes; unused seats cannot claim a fighter.
+P1/P2 retain PCSX2's existing mappings (or the check-in's override, controller_assignment).
+P3/P4 use private native-format pad records, published at a game-frame boundary by the
+controller hub (controller_hub.BattleSink). A short guest lease neutralizes held buttons if
+the host stops, a controller disconnects, or the match changes. Installed only for
+three/four-player modes; unused seats cannot claim a fighter.
 """
 from native_map import A, elf_path
 import math

@@ -8,10 +8,35 @@ import fusion_duration as timer
 import body_swap_commit as commit
 import body_swap_resources as resources
 import giant_options
+import arena_bounds
 
 ENTRY,CONTROL,END=timer.runner.RETIRE,timer.runner.RETIRE_CONTROL,timer.runner.END
 QUERY,FOOTPRINT,BODY=ENTRY+0x2000,ENTRY+0x3000,ENTRY+0x4000
 ROW,CANDIDATES=CONTROL+0x80,CONTROL+0x200
+
+
+def candidate_positions(root,yaw,radii,grounded,center_offset_gap=0.):
+    """Try a bounded set of separated positions, closest lateral ones first.
+
+    Narrow terrain may block the eight cardinal/diagonal positions even when
+    there is room just between them. Farther rings help a fused body standing
+    beside a wall, while airborne-only vertical alternatives fit enclosed
+    spaces without making a grounded partner appear floating in midair.
+    """
+    distance=max(24.,sum(radii)+8.)
+    turns=(0,8,4,12,2,14,6,10,1,15,3,13,5,11,7,9)
+    candidates=[]
+    for scale in (1.,1.5,2.):
+        for turn in turns:
+            angle=yaw+turn*math.pi/8
+            candidates.append((root[0]+math.cos(angle)*distance*scale,root[1],
+                               root[2]-math.sin(angle)*distance*scale,1.))
+    if not grounded:
+        # Different character heights shift the sphere centers by different
+        # amounts. Root spacing alone does not prove vertical separation.
+        vertical=max(distance,sum(radii)+8.+abs(center_offset_gap))
+        for sign in (-1,1):candidates.append((root[0],root[1]+sign*vertical,root[2],1.))
+    return candidates
 
 
 def code(guards,count,grounded):
@@ -32,7 +57,14 @@ def code(guards,count,grounded):
         a.li(8,ROW);a.i(49,0,8,0x14);a.i(49,1,16,0x20)
         fp(a,1,0,0,1);fp(a,5,0,0);constant(a,1,16)
         fp(a,0x36,0,0,1);a.branch(17,8,0,'retry')
-    a.li(4,ROW);a.call(BODY);a.branch(4,2,0,'retry')
+    # BODY checks solid terrain, but a valid sector can extend beyond the
+    # actual flight boundary. Test the live collision sphere center after
+    # the floor query adjusts Y, including expanded/destructed map limits.
+    a.li(4,ROW)
+    for off in (0,8):a.lw(8,4,0x10+off);a.sw(8,4,0x60+off)
+    a.i(49,0,4,0x14);a.i(49,1,4,0x24);fp(a,0,0,0,1);a.i(57,0,4,0x64)
+    arena_bounds.emit_inside(a,4,'retry','defusion',point=0x60)
+    a.call(BODY);a.branch(4,2,0,'retry')
     a.li(8,ROW)
     for off in range(0,16,4):a.lw(9,8,0x10+off);a.sw(9,16,0x70+off)
     a.addiu(8,0,1);a.sw(8,16,0x24);a.jump('complete')
@@ -64,12 +96,16 @@ def build_memory(ram,snap,receipt):
     oldroot=struct.unpack_from('<3f',ram,partner+2416)
     offset=center[1]-oldroot[1]
     require(math.isfinite(offset)and abs(offset)<1024,'Invalid partner sphere offset')
-    distance=max(24.,sum(radii)+8.)
-    candidates=[]
-    for rotation in (0,math.pi,math.pi/2,-math.pi/2,math.pi/4,-math.pi/4,3*math.pi/4,-3*math.pi/4):
-        angle=yaw+rotation
-        candidates.append((root[0]+math.cos(angle)*distance,root[1],root[2]-math.sin(angle)*distance,1.))
-    stage=u(terrain.STAGE);require(commit.ptr(ram,stage,64),'Stage unavailable during defusion')
+    grounded=u(snap['source']['actor']+2376)==11
+    gap=0.
+    if not grounded:
+        restored=receipt['staged_model'];sphere=u(restored+4000)
+        require(commit.ptr(ram,sphere,32),'Restored body sphere unavailable')
+        restored_offset=f(sphere+4)-f(restored+2420)
+        require(math.isfinite(restored_offset)and abs(restored_offset)<1024,'Invalid restored sphere offset')
+        gap=restored_offset-offset
+    candidates=candidate_positions(root,yaw,radii,grounded,gap)
+    stage=u(terrain.STAGE);require(commit.ptr(ram,stage,68),'Stage unavailable during defusion')
     sectors=u(stage+56);require(1<=sectors<=4096,'Invalid stage sector count')
     guards=[(snap['record'],3),(snap['record']+72,snap['generation']),
         (timer.core.ACTORS,snap['world']['manager']),(terrain.STAGE,stage),(stage+56,sectors),
@@ -85,7 +121,6 @@ def build_memory(ram,snap,receipt):
     struct.pack_into('<f',row,0x5C,root[1]-32)
     # Output and row occupy different ranges even though both are private.
     output=CONTROL+0x70
-    grounded=u(snap['source']['actor']+2376)==11
     pieces=[(ENTRY,code(guards,len(candidates),grounded)),(CONTROL,bytes(control)),(ROW,bytes(row)),
         (CANDIDATES,b''.join(struct.pack('<4f',*v)for v in candidates)),
         (QUERY,timer.core.rebound(terrain.query_code,QUERY=QUERY,CONTROL=CONTROL)()),

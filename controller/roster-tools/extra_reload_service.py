@@ -148,7 +148,7 @@ def build_memory(ram, physical, character, costume=0, damaged=False,
                     (A(0x2554D8), 0x30), (A(0x255508), 0x68), (A(0x24B238), 0x60),
                     (A(0x265298), 0x180), (A(0x255BD8), 0x28),
                     (A(0x255B88), 0x50), (A(0x255978), 0x68)):
-        if not prior.native_io_helper_matches(ram, native, p, size):
+        if ram[p:p+size] != native(p, size):
             raise ValueError(f'Native IO/allocator helper changed:{p:08X}')
     if any(ram[ENTRY:END]): raise ValueError('Reload IO reservation occupied')
     control = bytearray(256)

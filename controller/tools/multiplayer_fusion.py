@@ -4,7 +4,7 @@ One transaction per native team; arbitrary controller numbers, independent
 receipts, and no shared-screen publication into the legacy two-player ABI.
 The resource loader still requires the surviving body to be a native leader.
 """
-from native_map import A
+from native_map import A, FLAG_BITS
 import struct
 import localization
 from prototype import Assembler
@@ -129,6 +129,9 @@ def tick(previous):
     a.li(8,core.POINTERS);a.r(0,9,0,18,2);a.r(0x21,8,8,9);a.lw(17,8)
     a.lw(19,16,F['partner']);a.li(8,core.POINTERS);a.r(0,9,0,19,2);a.r(0x21,8,8,9);a.lw(20,8)
     a.lw(8,16);a.addiu(9,0,2);a.branch(4,8,9,'queued')
+    # Status 1 is an unanswered offer. Queued/committed transactions must
+    # finish normally if the host disables future fusions mid-match.
+    a.li(8,fusion.DISABLED);a.lw(8,8);a.branch(5,8,0,'cancel')
     a.li(8,CONTROL);a.lw(8,8,16);a.lw(9,16,F['ttl']);a.r(0x23,9,9,8);a.branch(6,9,0,'cancel')
     for reg in (17,20):
         a.move(4,reg);a.call(feed.ROW);a.branch(4,2,0,'cancel');a.lw(8,2);a.branch(6,8,0,'cancel')
@@ -140,7 +143,9 @@ def tick(previous):
         a.lw(8,reg,2376);a.addiu(9,0,11);a.branch(4,8,9,f'idle{reg}');a.addiu(9,0,15);a.branch(5,8,9,'next');a.label(f'idle{reg}')
         for off in (2380,2388,2392,2396,2400):a.lw(8,reg,off);a.addiu(9,0,-1);a.branch(5,8,9,'next')
         for off in (3480,3500,3512):a.lw(8,reg,off);a.branch(5,8,0,'next')
-        for off in (0x1097,0x10BF):a.i(36,8,reg,off);a.i(12,8,8,0x10);a.branch(5,8,0,'next')
+        # Native actor flag 148 (0x94) in both flag banks (USA bytes 0x1097/0x10BF, bit 0x10).
+        index,mask=FLAG_BITS((0x94,))
+        for off in (0x1085+index,0x10AD+index):a.i(36,8,reg,off);a.i(12,8,8,mask);a.branch(5,8,0,'next')
     a.move(4,17);a.lw(5,16,F['variant']);a.addiu(6,0,1);a.move(7,0);a.addiu(8,29,0x300)
     a.call(fusion.ELIGIBILITY);a.branch(4,2,0,'cancel');a.lw(8,29,0x300);a.r(2,9,0,19,1);a.branch(5,8,9,'cancel')
     a.move(4,17);a.lw(5,16,F['variant']);a.move(6,9);a.call(fusion.BEGIN);a.branch(4,2,0,'cancel')
