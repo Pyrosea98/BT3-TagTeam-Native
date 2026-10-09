@@ -44,6 +44,7 @@ END = BASE+0x8000      # lockon_select.BASE
 HITLOG, TRAMPOLINE, INPUT3, APPLY3 = BASE, BASE+0x200, BASE+0x400, BASE+0x2000
 DRAW, ENTRY, QUAD_LINK = BASE+0x3000, BASE+0x5000, BASE+0x5040
 CONTROL, ROWS, LAST, CELLS = BASE+0x7000, BASE+0x7100, BASE+0x7400, BASE+0x7500
+NATIVE_PROBE = BASE+0x50F0
 MAGIC = 0x54485231   # 'THR1'
 STRIDE = 64          # ROWS, one per physical slot
 LAST_STRIDE = 16     # LAST: attacker (0xFFFFFFFF none), when (feed clock + 1), damage
@@ -492,7 +493,13 @@ def draw_code():
     a.lw(8, 21, FIELDS['marks']); a.lw(9, 20, TGT); a.lw(10, 20, ATK)
     a.addiu(11, 0, 2); a.branch(4, 8, 11, 'warned'); a.move(10, 0); a.jump('sets')
     a.label('warned'); a.r(0x25, 9, 9, 10)
-    a.label('sets'); a.sw(9, 29, D_DRAW); a.sw(10, 29, D_WARN); a.branch(4, 9, 0, 'return')
+    a.label('sets'); a.sw(9, 29, D_DRAW); a.sw(10, 29, D_WARN)
+    # Publish only after every upstream camera/viewport/eligibility gate.
+    a.sw(9, 20, 52); a.sw(10, 20, 56)
+    a.li(8, queue.CONTROL); a.lw(8, 8, queue.FIELDS['frames']); a.sw(8, 20, 48)
+    a.li(8, 0x4E505231); a.sw(8, 20, 60)
+    a.move(4, 16); a.call(NATIVE_PROBE); a.branch(5, 2, 0, 'return')
+    a.lw(9, 29, D_DRAW); a.branch(4, 9, 0, 'return')
     sel.emit_push(a, 22)
     a.move(18, 0)
     a.label('loop'); a.r(0x2B, 8, 18, 19); a.branch(4, 8, 0, 'pop')
@@ -649,7 +656,8 @@ def data_blocks(manager, switch, marks, acc_tail, render_tail, quad):
 
 def code_parts():
     return [(HITLOG, hitlog_code()), (INPUT3, input_code()), (APPLY3, apply_code()), (DRAW, draw_code()),
-            (ENTRY, entry_code()), (QUAD_LINK, quad_link_code())]
+            (ENTRY, entry_code()), (QUAD_LINK, quad_link_code()),
+            (NATIVE_PROBE, struct.pack('<4I', 0x24020000, 0x03E00008, 0, 0))]
 
 
 def quad_sites(data, base, target):

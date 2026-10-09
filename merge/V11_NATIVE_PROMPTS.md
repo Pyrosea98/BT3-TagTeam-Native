@@ -5,8 +5,8 @@ not change the published v0.1 installer or enable new gameplay features.
 
 | Surface | Current route | Native adaptation |
 | --- | --- | --- |
-| Beam-assist hint, multiplier and failure captions | `beam_struggle.py` draws outlined guest text per viewport | Use the existing fusion/revive prompt typography and player-local placement. Retain eligibility, assist count, caption lifetime and EN/ES text. Native rendering remains pending. |
-| Attacker warnings and target marks | `lockon_threat.py` emits guest graphics | Match the native overhead indicators, including viewport projection and human owner. Native rendering remains pending. |
+| Beam-assist hint, multiplier and failure captions | Upstream draw gates publish their selected localized text slot | Native glass/gold caption chip per human viewport. Eligibility, assist count, caption lifetime and EN/ES text remain upstream-owned. |
+| Attacker warnings and target marks | Upstream camera gates publish admitted masks and marker style | Native overhead ring/hexagon, chevrons and border warnings. Guest rendering stays available when native projection coverage is incomplete. |
 | Settings/menu rows | Existing native menu adapter | Reuse the current menu layout; unsupported emulator-only controls remain hidden. |
 | Structured preparation failures | v11 passes `error=(first, second)` to `Presentation.show` | Adapter now accepts the argument and selects the existing native failure cover even for localized messages. Detailed text is logged; the cover still displays its existing generic localized failure message. |
 
@@ -25,5 +25,23 @@ not change the published v0.1 installer or enable new gameplay features.
 
 `tools/codex_check_v11_error_cover.py` exercises the real presentation adapter
 with a localized structured failure and confirms that accepted/released matches
-remain uncovered. Battle prompt rendering requires runtime implementation and a
-visual gameplay check; this audit does not claim that acceptance.
+remain uncovered.
+
+Rendering is implemented on runtime branch `v02-v11-native-hud` with isolated
+runner `ps2EntryRunner-v02-v11-hud.exe`. The local merged controller branch is
+`v02-v11-local`. Pair these sources: the released v0.1 runner does not implement
+the new presentation probes.
+
+- `codex_check_v11_prompt_emission.py`: both actor capacities assemble; code and
+  presentation allocations do not overlap; original fallback stub ABI retained.
+- `--native-v11-prompts-self-test`: manager/actor ownership, stale rows, exact
+  draw-code authentication, projection fallback, and interpreted fallback PASS.
+- Eight Vulkan captures reviewed: EN/ES, full/split/quad views, off-screen
+  warnings and ultrawide layouts. Private output is under
+  `experiments/v11-local-validation/hud-captures`.
+- No live beam-assist/targeting gameplay acceptance yet. New gameplay options
+  remain off by default; native rendering does not enable them.
+
+Local trial: `experiments/v11-local-validation/Play v0.2 native HUD.cmd`. It uses
+the merged sandbox controller and the new runner, with the shared game lock and
+existing read-only disc/native UI assets. Installed/released launchers are unchanged.

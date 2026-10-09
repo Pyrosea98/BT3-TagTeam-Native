@@ -55,6 +55,7 @@ TAIL_INPUT, TAIL_APPLY = BASE+0x6000, BASE+0x6020
 ARROW_PACKET, ARROW_LIFT = BASE+0x6400, BASE+0x6680
 # QMARKER: the quad renderer's per-view extension entry (MARKER without the overhead bars); SIZE: the ring radius.
 QMARKER, SIZE = BASE+0x5B00, BASE+0x5B40
+NATIVE_PROBE, NATIVE_ROWS = BASE+0x5B20, BASE+0x7600
 CONTROL, ROWS = BASE+0x7000, BASE+0x7100
 MAGIC = 0x4C4B5331  # 'LKS1'
 STRIDE = 64
@@ -903,6 +904,9 @@ def marker_code():
     a.r(0x2B, 8, 16, 19); a.branch(4, 8, 0, 'return')
     emit_actor(a, 16, 17, 'return'); a.lw(8, 17, 0x1278); a.branch(5, 8, 0, 'return')
     emit_health(a, 17, 'return')
+    emit_row(a, 16, 9, NATIVE_ROWS, 4)
+    a.sw(17, 9); a.li(8, queue.CONTROL); a.lw(8, 8, queue.FIELDS['frames']); a.sw(8, 9, 4)
+    a.sw(0, 9, 8); a.sw(0, 9, 12)
     a.move(4, 16); a.call(off.IS_OFF); a.branch(5, 2, 0, 'unmark')    # unlocked: a relock drops in again
     a.li(8, core.TABLE); a.r(0, 9, 0, 16, 2); a.r(0x21, 8, 8, 9); a.lw(18, 8)
     a.r(0x2B, 8, 18, 19); a.branch(4, 8, 0, 'return')
@@ -916,6 +920,9 @@ def marker_code():
     a.label('marked'); a.lw(8, 17, 4); a.r(0x23, 8, 20, 8); a.sw(8, 29, M_AGE)  # age (unsigned)
     a.sw(20, 29, M_FRAMES)
     a.lw(8, 21, FIELDS['style']); a.sw(8, 29, M_STYLE)
+    emit_row(a, 16, 9, NATIVE_ROWS, 4); a.addiu(10, 18, 1); a.sw(10, 9, 8); a.sw(8, 9, 12)
+    a.move(4, 16); a.call(NATIVE_PROBE); a.branch(5, 2, 0, 'pop')
+    a.lw(8, 29, M_STYLE)
     a.i(12, 9, 8, 1); a.branch(4, 9, 0, 'ring')
     # The arrow: above the lifted head (the overhead bars' lift), its tip clamped so the whole dart stays in view.
     emit_anchor(a, 23, 48, 'head')
@@ -1139,7 +1146,8 @@ def code_parts():
             (AIM, aim_code()), (MARKER, marker_code()),
             (SEG, segment_code()), (STRIP, strip_code()), (TRI, triangle_code()),
             (TAIL_INPUT, tail(off.INPUT, first[off.INPUT])), (TAIL_APPLY, tail(off.APPLY, first[off.APPLY])),
-            (RING_HEADER, ring_data()), (QMARKER, qmarker_code()), (SIZE, size_code()),
+            (RING_HEADER, ring_data()), (QMARKER, qmarker_code()),
+            (NATIVE_PROBE, struct.pack('<4I', 0x24020000, 0x03E00008, 0, 0)), (SIZE, size_code()),
             (ARROW_PACKET, packet_template()), (ARROW_LIFT, lift_table())]
 
 
@@ -1279,7 +1287,8 @@ def build_memory(ram, settings=None, source='<prepared>'):
     struct.pack_into('<2I', control, FIELDS['style'], values['style'], int(quad_draw is not None))
     struct.pack_into('<12I', control, FIELDS['keys'], *(INVALID,)*12)
     # The rows, then MARKS (8 bytes per seat) in the same zero block.
-    parts = code_parts()+[(CONTROL, bytes(control)), (ROWS, bytes(STRIDE*modes.ENGINE_ACTORS+8*modes.ENGINE_ACTORS))]
+    parts = code_parts()+[(CONTROL, bytes(control)), (ROWS, bytes(STRIDE*modes.ENGINE_ACTORS+8*modes.ENGINE_ACTORS)),
+                         (NATIVE_ROWS, bytes(16*modes.ENGINE_ACTORS))]
     ordered = sorted(parts)
     if any(p+len(b) > n for (p, b), (n, _) in zip(ordered, ordered[1:])) or ordered[-1][0]+len(ordered[-1][1]) > END:
         raise ValueError('Target selection code overlaps')

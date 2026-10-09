@@ -32,6 +32,18 @@ def check_dependencies(roster=True):
             source=HERE/'roster-tools'/source.name
         if not source.is_file():continue
         tree=ast.parse(source.read_text(encoding='utf-8-sig'),str(source))
+        # v11 developer helpers can deliberately fall back when an adapter
+        # module is absent (for example BT4 file numbering on a BT3 disc).
+        optional=set()
+        for guard in ast.walk(tree):
+            if not isinstance(guard,ast.Try):continue
+            catches=[]
+            for handler in guard.handlers:
+                if any(isinstance(node,ast.Raise) for statement in handler.body for node in ast.walk(statement)):continue
+                catches.extend(handler.type.elts if isinstance(handler.type,ast.Tuple) else [handler.type])
+            if any(isinstance(error,ast.Name) and error.id in ('ImportError','ModuleNotFoundError') for error in catches):
+                for statement in guard.body:
+                    optional.update(id(node) for node in ast.walk(statement) if isinstance(node,(ast.Import,ast.ImportFrom)))
         # Offline preview functions may depend on developer-only test helpers.
         # Production lazy methods and their imports are still traversed.
         def runtime_nodes(node):
@@ -51,7 +63,7 @@ def check_dependencies(roster=True):
                     continue
                 try:spec=importlib.util.find_spec(dependency)
                 except (ImportError,ValueError):spec=None
-                if spec is None:missing.append((name,dependency,node.lineno))
+                if spec is None and id(node) not in optional:missing.append((name,dependency,node.lineno))
     # Import the staged package's actual lazy entry points and relative imports.
     for name in ('iso_compatibility.disc','iso_compatibility.scanner','iso_compatibility.expanded_maps'):
         module=importlib.import_module(name)

@@ -127,7 +127,10 @@ SLOTS, SLOT_STRIDE = 0x280, 0x40
 # the switched view's subject word, its old and new values, the assister's physical index, its formation index.
 S = dict(actor=0x00, serial=0x04, state=0x08, age=0x0C, fail=0x10, tries=0x14, seen=0x18, sign=0x1C,
          sx=0x20, sy=0x24, sz=0x28, view=0x2C, view_old=0x30, view_new=0x34, phys=0x38, k=0x3C)
-CONTROL_SIZE = 0x480
+CONTROL_SIZE = 0x640
+# Presentation-only rows: actor pointer, struggle age/serial, selected text slot.
+# The probe returns zero on ordinary runtimes, retaining the guest renderer.
+NATIVE_ROWS, NATIVE_PROBE = CONTROL+0x500, BASE+0x33F0
 STATE_LO, STATE_HI = 0x104, 0x1C0
 # Install groups (CONTROL+0x6C bits).
 G_CLOCK, G_PUSH, G_TICK, G_HITS, G_END, G_CINE, G_CAPTION, G_CAMERA = (1 << i for i in range(8))
@@ -1466,6 +1469,9 @@ def draw_code():
     a.branch(5, 21, 8, 'view'); a.jump('done')
     a.label('subject'); a.lw(20, 19); a.lw(9, 16, C['count']); a.r(0x2B, 9, 20, 9); a.branch(4, 9, 0, 'done')
     actor_at(a, 21, 20); a.branch(4, 21, 0, 'done')
+    a.r(0, 8, 0, 20, 5); a.li(9, NATIVE_ROWS); a.r(0x21, 8, 8, 9)
+    a.sw(21, 8); a.lw(9, 17, 20); a.sw(9, 8, 4)
+    a.lw(9, 17, 24); a.sw(9, 8, 8); a.sw(0, 8, 12)
     a.lw(9, 16, C['serial']); a.lw(10, 17, 24); a.move(22, 0); a.branch(5, 9, 10, 'hint')
     a.addiu(22, 0, 1)                                                           # s6: STATE is this struggle's
     a.lw(9, 17, 64); a.branch(4, 21, 9, 'side0'); a.lw(9, 17, 68); a.branch(4, 21, 9, 'side1')
@@ -1505,6 +1511,8 @@ def draw_code():
     a.label('hint_text'); a.li(4, HINT_TEXT)
     # A black outline keeps the caption readable on the struggle's white glow (LOOKed live: plain text vanished).
     a.label('draw'); a.move(23, 4)
+    a.lw(4, 21); a.r(0, 8, 0, 4, 5); a.li(9, NATIVE_ROWS); a.r(0x21, 8, 8, 9)
+    a.sw(23, 8, 12); a.call(NATIVE_PROBE); a.branch(5, 2, 0, 'done')
     a.lw(21, 18, 512); a.addiu(21, 21, 1792+8); a.lw(22, 18, 524); a.addiu(22, 22, Y_ORIGIN+screen_y(CAPTION_Y))
     for dx, dy, color in ((-1, 0, OUTLINE_COLOR), (1, 0, OUTLINE_COLOR), (0, -1, OUTLINE_COLOR), (0, 1, OUTLINE_COLOR),
                           (0, 0, CAPTION_COLOR)):
@@ -1525,7 +1533,8 @@ def programs(consts, original_contact):
            (ASSIST, assist_code()), (KIBLAST, kiblast_code()), (DMG, dmg_code()), (CINE, cine_code()),
            (HIT, hit_code()), (STUBS, stubs), (PLACE, place_code()), (PRE, pre), (BYSTANDER, bystander_code()),
            (TRAMPOLINE, trampoline),
-           (REGISTER, register_code()), (MULTIPLIER, multiplier_code()), (DRAW, draw_code()), (POSE, pose_code()),
+           (REGISTER, register_code()), (MULTIPLIER, multiplier_code()), (DRAW, draw_code()),
+           (NATIVE_PROBE, struct.pack('<4I', 0x24020000, 0x03E00008, 0, 0)), (POSE, pose_code()),
            (R3PRE, r3pre_code()), (ELIGIBLE, eligible_code()), (STEP, step_code()),
            (CONFIRM, confirm_code()), (FAIL, fail_code()), (FLOOR, floor_code()), (QUERY, query_code()),
            (REFUSE, refuse_code()), (FREE, free_code()), (SLOTOF, slotof_code()), (FAILCAP, failcap_code()),
