@@ -111,12 +111,12 @@ class Surface:
             self.accepted=True
             # Keep heartbeat/ownership alive while intro runs. Native view fades
             # independently; actual release still waits for start-gate ACK.
-    def show(self,message,progress):
+    def show(self,message,progress,*,error=None):
         # Native disc loading already has its own picture. Begin at the worker's
         # actual first preparation event, after it has acquired its hold.
-        if 'FAIL' in str(message).upper() or 'CLOSE AND REOPEN' in str(message).upper():
+        if error is not None or 'FAIL' in str(message).upper() or 'CLOSE AND REOPEN' in str(message).upper():
             with self.lock:
-                print(f'[nativeui-failure] mode={self.mode} phase={self.phase} startAccepted={self.accepted} message={message!r}',flush=True)
+                print(f'[nativeui-failure] mode={self.mode} phase={self.phase} startAccepted={self.accepted} message={message!r} details={error!r}',flush=True)
                 if self.accepted or self.phase=='released':
                     print('[nativeui-failure] late diagnostic logged; active match cover remains closed',flush=True)
                     return self.available
@@ -160,7 +160,7 @@ class Presentation:
         self.guest.set_teams(teams)
     def set_mode(self,*args):return self.guest.set_mode(*args)
     def prerender(self,*args):return True
-    def show(self,title,message,progress,mute_audio=True):return self.guest.show(message,progress)
+    def show(self,title,message,progress,mute_audio=True,error=None):return self.guest.show(message,progress,error=error)
     def tick(self):return self.guest.sync()
     def wait_visible(self,timeout=2):return self.guest.available
     def wait_hidden(self,timeout=2):return not self.guest.visible
