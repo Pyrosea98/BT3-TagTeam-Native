@@ -26,4 +26,10 @@ Special thanks to RidJuampa for helping me understand the code.
 THIRD-PARTY SOFTWARE
 This build includes a native runtime (BT3-Recomp) and a temporary embedded controller built on CPython, Pillow, pycdlib, psutil and other open-source libraries. Their licences are listed in the THIRD_PARTY_NOTES file and the notices folder in the install folder. Fonts are used under their own open licences.
 
+SOURCE CODE (GPL-3.0)
+This program is free software under the GNU General Public License v3. The complete corresponding source code is public:
+https://github.com/Pyrosea98/BT3-TagTeam-Native
+https://github.com/Pyrosea98/BT3-TagTeam-Runtime
+It is built on The Mufti's Tag Team Mod: https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-
+
 By continuing you confirm that you own the disc image you will import and that you accept these terms.

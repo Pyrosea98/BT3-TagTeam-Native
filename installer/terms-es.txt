@@ -26,4 +26,10 @@ Agradecimiento especial a RidJuampa por ayudarme a entender el código.
 SOFTWARE DE TERCEROS
 Esta versión incluye un runtime nativo (BT3-Recomp) y un controlador temporal incorporado basado en CPython, Pillow, pycdlib, psutil y otras bibliotecas de código abierto. Sus licencias figuran en el archivo THIRD_PARTY_NOTES y en la carpeta notices de la carpeta de instalación. Las fuentes se usan bajo sus propias licencias abiertas.
 
+CODIGO FUENTE (GPL-3.0)
+Este programa es software libre bajo la Licencia Publica General GNU v3. El codigo fuente completo correspondiente es publico:
+https://github.com/Pyrosea98/BT3-TagTeam-Native
+https://github.com/Pyrosea98/BT3-TagTeam-Runtime
+Esta basado en el Tag Team Mod de The Mufti: https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-
+
 Al continuar confirmas que eres propietario de la imagen de disco que vas a importar y que aceptas estos términos.
