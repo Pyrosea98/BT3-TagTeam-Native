@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BT3 Tag Team: Player Manual</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root { --ink:#16202c; --muted:#556070; --gold:#b9770e; --blue:#1d5e9a; --line:#d6dde6; --bg:#f6f8fb; }
+  * { box-sizing: border-box; }
+  body { font: 11pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); margin: 0; }
+  header.cover { background: linear-gradient(135deg,#0e1730,#1b3b5a); color:#fff; padding: 30px 28px; border-radius: 10px; margin-bottom: 18px; }
+  header.cover h1 { margin:0 0 4px; font-size: 26pt; letter-spacing: .5px; color:#f5c04a; }
+  header.cover p { margin:0; color:#d7e3f2; }
+  h2 { font-size: 16pt; color: var(--blue); border-bottom: 2px solid var(--line); padding-bottom: 3px; margin: 22px 0 8px; break-after: avoid; }
+  h3 { font-size: 12.5pt; color: var(--gold); margin: 14px 0 4px; break-after: avoid; }
+  p, li { margin: 4px 0; }
+  ul, ol { padding-left: 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 10pt; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  .note { background:#fff8e6; border-left: 4px solid var(--gold); padding: 6px 10px; margin: 8px 0; }
+  .warn { background:#fdeeee; border-left: 4px solid #b3261e; padding: 6px 10px; margin: 8px 0; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  code, kbd { font-family: Consolas, monospace; background: #eef2f7; padding: 0 4px; border-radius: 3px; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 9.5pt; border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+<header class="cover">
+  <h1>BT3 Tag Team</h1>
+  <p>Player manual for the standalone Windows build (Preview 0.1). Dragon Ball Z: Budokai Tenkaichi 3, Power Scale BETA 1.5.1, with the Tag Team mod built in.</p>
+</header>
+
+<div class="note"><b>Preview build.</b> Some features are still being finished. The list of known limits is in section 12. This is an unofficial fan project, not affiliated with the owners of Dragon Ball or Budokai Tenkaichi. The game files are not included: you import them from your own disc image.</div>
+
+<h2>Contents</h2>
+<ol class="toc">
+  <li><a href="#start">Getting started</a></li>
+  <li><a href="#modes">Game modes</a></li>
+  <li><a href="#controls">Controls and controllers</a></li>
+  <li><a href="#hud">The HUD and the overhead markers</a></li>
+  <li><a href="#fusion">Fusion</a></li>
+  <li><a href="#cpu">CPU tactics</a></li>
+  <li><a href="#revive">Reviving teammates</a></li>
+  <li><a href="#more">Cinematics, giants, fighters, spectating and training</a></li>
+  <li><a href="#settings">Settings reference</a></li>
+  <li><a href="#saves">Saves, data and uninstalling</a></li>
+  <li><a href="#trouble">Troubleshooting</a></li>
+  <li><a href="#known">Known limits of this preview</a></li>
+  <li><a href="#credits">Credits</a></li>
+</ol>
+
+<h2 id="start">1. Getting started</h2>
+<ol>
+  <li><b>Install.</b> Run <code>BT3-TagTeam-...-Setup.exe</code>. It installs for your user only (no administrator rights). Pick the folder on the destination page: the game data (imported disc, saves, settings) lives in a <code>data</code> folder inside it. The build is not code-signed, so Windows SmartScreen may warn: choose <b>More info</b>, then <b>Run anyway</b>.</li>
+  <li><b>Import your disc.</b> On the first run, pick your <b>Power Scale BETA 1.5.1</b> disc image. The game checks it, expands the maps to twice their size, and prepares the interface art. Allow a few minutes and about 12 GB of free space on the install drive. Your disc image is never modified.</li>
+  <li><b>Saves.</b> The installer asks whether to start with <i>all content unlocked</i> or a fresh save with normal progression. An existing save is never overwritten.</li>
+  <li><b>Play.</b> After the credits, press the menu switch button on the original main menu to open the mod menus and choose a mode.</li>
+</ol>
+
+<h2 id="modes">2. Game modes</h2>
+<table>
+  <tr><th>Mode</th><th>What it is</th></tr>
+  <tr><td>Team battle</td><td>Team 1 against Team 2, up to 5 fighters per side (any combination such as 1v1, 2v3 or 5v5), with 1 to 4 human players assigned to teams.</td></tr>
+  <tr><td>Free-for-all</td><td>Every fighter against all the others, up to 10 fighters, humans and CPUs. The Ready and FIGHT banners play before the start.</td></tr>
+  <tr><td>Co-op</td><td>Humans fight together against CPU enemies.</td></tr>
+  <tr><td>Modded Training</td><td>One to four players practise against a CPU that stands still or fights back, with health, ki and stock refills.</td></tr>
+  <tr><td>About / Credits</td><td>Names and links of the people behind the project.</td></tr>
+</table>
+<p>After you choose a mode you pick fighters on the character select screen. With two or more humans, a setup screen lets you assign players to teams and, if needed, assign controllers. Fight Again keeps the same teams and settings.</p>
+
+<h2 id="controls">3. Controls and controllers</h2>
+<ul>
+  <li><b>Standard Budokai Tenkaichi 3 controls</b> apply: <kbd>R3</kbd> opens the transformation list, <kbd>Start</kbd> pauses.</li>
+  <li><b>Targeting.</b> Tap <kbd>L3</kbd> to switch to the next target. Hold <kbd>L3</kbd> (0.5 s by default) to lock off; tap it again to target the enemy nearest the centre of your view. Buttons and the hold time can be changed in <i>Settings, Controls</i>.</li>
+  <li><b>Players 1 and 2</b> use the controllers or the keyboard set in the runtime overlay. Press <kbd>Shift</kbd>+<kbd>Tab</kbd> in the game to open it and use the <b>Controllers</b> tab to choose a device for each player, rebind buttons and test them.</li>
+  <li><b>Players 3 and 4</b> use their own gamepads. Native mapping options for players 3 and 4 in the overlay are being added.</li>
+  <li><b>Menu switch.</b> A button on the original main menu opens and closes the mod menus (set in <i>Settings, Menus</i>).</li>
+</ul>
+
+<h2 id="hud">4. The HUD and the overhead markers</h2>
+<p>The mod can replace the original corner panels with small translucent markers over the fighters, so your view stays clear.</p>
+<table>
+  <tr><th>Setting</th><th>Options</th></tr>
+  <tr><td>HUD style</td><td><b>Game HUD + overhead</b> keeps the original HUD. <b>Overhead only</b> hides the original HUD completely; the overhead markers then carry life, ki, ki stocks, transformation or charge state, and the fusion timer.</td></tr>
+  <tr><td>Overhead shape</td><td>Hexagon (default), Ring, Plate or Off. The border of the shape is the gauge: life in green (red when low) and ki in blue.</td></tr>
+  <tr><td>Detail level</td><td>1P only, 1P and target, 1P, target and allies, or <b>Everyone</b> (every on-screen fighter, enemies included, in a smaller size).</td></tr>
+  <tr><td>Names</td><td>Off (default), Tiny or Normal, under the marker.</td></tr>
+  <tr><td>Ki stocks, portraits</td><td>Small pips for blast stocks and a portrait inside the shape can each be switched on or off.</td></tr>
+  <tr><td>Size and opacity</td><td>Scale 50, 65, 80, 100 or 120 percent; opacity 30, 50, 70 or 100 percent. There are hard caps so the markers never hide the fight.</td></tr>
+  <tr><td>Contestant list</td><td>Off, Compact or Full list for free-for-all and large matches.</td></tr>
+  <tr><td>Other switches</td><td>Friendly and enemy health bars, the kill feed, the kill score, split-screen HUD style and portraits.</td></tr>
+</table>
+<p>The markers fade and shrink during cinematics and are hidden while the game is paused. Your own marker and your target share the same look; only the accent colour differs.</p>
+
+<h2 id="fusion">5. Fusion</h2>
+<p>There are two kinds of fusion. <b>Fusion Dance</b> fusions are <i>timed</i>; <b>Potara</b> fusions (for example Vegito) are permanent. To fuse, open the transformation list with <kbd>R3</kbd>, select the fusion entry, and confirm with the button combination shown in the menu. The partner then gets a small <b>R3 FUSE</b> prompt over their fighter to accept.</p>
+<h3>Who controls a shared fusion</h3>
+<p>When two humans share a fusion, <i>P1</i> and <i>P2</i> mean the first and the second fuser, for any pair of seats. Choose one of six modes in <i>Settings, Fusion</i>:</p>
+<ol>
+  <li><b>Swap control:</b> full control passes between the two players at a set interval.</li>
+  <li><b>P1 attacks, P2 moves.</b></li>
+  <li><b>P2 attacks, P1 moves.</b></li>
+  <li><b>Swap roles:</b> the move and attack roles alternate at the interval.</li>
+  <li><b>P1 does everything.</b></li>
+  <li><b>P2 does everything.</b></li>
+</ol>
+<p>The swap interval can be 5, 10, 15, 20 (default), 30, 45 or 60 seconds. The first swap happens one full interval after the fusion starts. Timers pause with the game and with cinematics.</p>
+<h3>Fusion time and form drain</h3>
+<p>If <b>fusion duration</b> is on, a Fusion Dance fusion ends after the set time. With <b>form drain</b> on, higher forms use that time faster. The fusion has a life bar that drains at a speed set by the current form; changing forms changes the speed from then on and never refunds or resets spent time. After a transformation finishes you always get at least one second in the new form.</p>
+<table>
+  <tr><th>Preset</th><th>Time lost per form step (1st to 5th form)</th></tr>
+  <tr><td>Mild</td><td>5, 10, 15, 20, 25 percent</td></tr>
+  <tr><td>Normal</td><td>10, 20, 30, 40, 50 percent</td></tr>
+  <tr><td>Heavy</td><td>20, 35, 50, 60, 70 percent</td></tr>
+</table>
+<h3>Fusion indicators on screen</h3>
+<p>Small arcs over the fused fighter show the remaining fusion time (gold, yellow under 10 seconds with a number, red under 3) and the time until the next control swap, with P1 and P2 markers and move or attack symbols. Permanent fusions show no timer.</p>
+
+<h2 id="cpu">6. CPU tactics</h2>
+<p>By default the CPU behaves as in the original game. <i>Settings, CPU tactics</i> lets you make allied and enemy CPUs transform more. The settings have separate scopes: <b>Allies</b> (the first team) and <b>Enemies</b>; in free-for-all all CPUs count as enemies.</p>
+<ul>
+  <li><b>Native:</b> the original AI, unchanged.</li>
+  <li><b>More often:</b> the CPU uses its available transformations earlier instead of waiting for the original random chance.</li>
+  <li><b>When outmatched:</b> the CPU transforms when it looks weaker than its opponent: low health, a ki deficit, recent damage, and the reviewed form tier of the opponent.</li>
+  <li><b>Preset:</b> Native, Aggressive or Relentless. A more aggressive preset uses lower score thresholds and shorter cooldowns between planned transformations (from about 8 seconds down to about 3).</li>
+</ul>
+<p>The planner never bypasses the game's own rules: stock costs, the per-character exceptions on the Fighters page, the giants restrictions and the chance limit still apply. CPU revival and autonomous CPU fusion are not part of this preview setting; CPUs may still fuse by the original AI.</p>
+
+<h2 id="revive">7. Reviving teammates</h2>
+<p>Turn on <i>Settings, Revival</i> to bring fallen teammates back. Stay inside the circle around a fallen ally for the set time (4 seconds by default). Moving and taunting keep your progress; taking damage or leaving the circle interrupts it. Reviving costs blast stocks (4 by default), not ki, and restores the set amount of health. A native arc over the fallen fighter fills as you channel, with the stock cost shown as small pips and clear states for completed, cancelled and not enough stocks. There is no revival in free-for-all.</p>
+
+<h2 id="more">8. Cinematics, giants, fighters, spectating and training</h2>
+<ul>
+  <li><b>Cinematics:</b> choose who pauses during special moves, whether transformations use a shared view or frame each half in split screen, and whether extra fighter intros play.</li>
+  <li><b>Giants:</b> larger giants scale the game's giant forms. Size, attack speed, damage, stagger resistance and camera distance apply only while larger giants are on.</li>
+  <li><b>Fighters:</b> Ginyu body exchange and stolen abilities, extra voices, and the CPU transformation switches, chance limit and per-character exceptions.</li>
+  <li><b>Spectating:</b> a defeated human can watch other fighters and take over a living CPU teammate, never an enemy, and not in free-for-all.</li>
+  <li><b>Training:</b> Modded Training takes one to four players. Health, ki and stocks refill after a delay; with health refill off, a defeat can end the session.</li>
+</ul>
+
+<h2 id="settings">9. Settings reference</h2>
+<p>Open the mod menu, then Settings. Most options apply from the next match; a Fight Again rematch keeps the settings of its match. Pages:</p>
+<table>
+  <tr><th>Page</th><th>What it controls</th></tr>
+  <tr><td>Menus</td><td>Language (English or Spanish), mod menu switch button, loading animation speed, the decorative loading cover.</td></tr>
+  <tr><td>Character select</td><td>Own fighters per human, all controllers on the cursor, player slot labels.</td></tr>
+  <tr><td>Controls</td><td>Target switch and lock-off buttons and hold times.</td></tr>
+  <tr><td>Cinematics</td><td>Special-move pause, ultimate, transformation and rush cinematics, split-screen view, extra intros.</td></tr>
+  <tr><td>Fusion</td><td>Control mode, swap seconds, prompt and timers, fusion duration, form drain and its presets.</td></tr>
+  <tr><td>CPU tactics</td><td>Allied and enemy CPU transformations and the preset.</td></tr>
+  <tr><td>Fighters, Giants</td><td>Per-character and global fighter options; larger giants and their tuning.</td></tr>
+  <tr><td>HUD, Split-screen HUD</td><td>Overhead markers, original HUD, health bars, kill feed; panel styles for split screen.</td></tr>
+  <tr><td>Spectating, Revival, Training</td><td>As described above.</td></tr>
+  <tr><td>Launch options</td><td>Options that need a restart (the game shows <b>Restart required</b> with a <b>Restart now</b> button).</td></tr>
+  <tr><td>Diagnostics</td><td>Optional debug files for troubleshooting; they can be large.</td></tr>
+</table>
+
+<h2 id="saves">10. Saves, data and uninstalling</h2>
+<ul>
+  <li>Everything the game creates (imported data, saves, settings, logs) is inside the <code>data</code> folder in the install folder.</li>
+  <li>Reinstalling or upgrading keeps your data and does not repeat the import.</li>
+  <li>Uninstalling keeps all game data by default. It has two unchecked options: remove the game data, and separately remove your saves. Saves are never deleted silently.</li>
+  <li>Your original disc image is never touched.</li>
+</ul>
+
+<h2 id="trouble">11. Troubleshooting</h2>
+<table>
+  <tr><th>Problem</th><th>What to do</th></tr>
+  <tr><td>"That disc isn't supported"</td><td>The image is not the exact Power Scale BETA 1.5.1 build. Use the right disc image.</td></tr>
+  <tr><td>Not enough space</td><td>The import needs about 12 GB free on the install drive. Free space or install on another drive.</td></tr>
+  <tr><td>"Match preparation failed"</td><td>Close the game and reopen it, then try again. Note the characters in the match and send them with the log (see below).</td></tr>
+  <tr><td>Black 3D scene after a fusion or transformation</td><td>Leave the match running for about 10 seconds so the diagnostics can capture it, then close the game and report it.</td></tr>
+  <tr><td>Slow in big matches</td><td>5v5 currently runs around 20 to 30 updates per second on a Ryzen 5700G; small matches reach 60. Close other heavy programs.</td></tr>
+  <tr><td>A setting did not apply</td><td>Most apply from the next match. Launch options need a restart.</td></tr>
+</table>
+<p>Logs are in the <code>data</code> folder. When you report a problem, include the log and say what you were doing; the logs do not contain personal paths.</p>
+
+<h2 id="known">12. Known limits of this preview</h2>
+<ul>
+  <li>Fusion between Goku Black (Rose) and Zamasu may not start yet, and Super Goku and Super Vegeta may not pair with each other yet.</li>
+  <li>CPU fusion always picks the same result for a pair (for example Vegito); a choice between results is planned.</li>
+  <li>The loading cover between the mod menu and character select and the 2-player setup screen are being fixed.</li>
+  <li>Windows only. The Android version is still being investigated.</li>
+  <li>Some options inherited from the emulator version (widescreen patch, fast disc loading, emulated CPU speed) do not apply to this build.</li>
+</ul>
+
+<h2 id="credits">13. Credits</h2>
+<p><b>Power Scale:</b> LetsPlayBt3 (https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw)<br>
+<b>Tag Team mod:</b> The Mufti (https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A)<br>
+<b>Special thanks</b> to RidJuampa for helping me understand the code.</p>
+
+<footer>BT3 Tag Team, Preview 0.1. Third-party licences are listed in the THIRD_PARTY_NOTES file in the install folder.</footer>
+</body>
+</html>

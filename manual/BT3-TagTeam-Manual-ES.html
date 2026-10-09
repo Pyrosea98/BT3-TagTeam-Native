@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>BT3 Tag Team: Manual del jugador</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root { --ink:#16202c; --muted:#556070; --gold:#b9770e; --blue:#1d5e9a; --line:#d6dde6; --bg:#f6f8fb; }
+  * { box-sizing: border-box; }
+  body { font: 11pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); margin: 0; }
+  header.cover { background: linear-gradient(135deg,#0e1730,#1b3b5a); color:#fff; padding: 30px 28px; border-radius: 10px; margin-bottom: 18px; }
+  header.cover h1 { margin:0 0 4px; font-size: 26pt; letter-spacing: .5px; color:#f5c04a; }
+  header.cover p { margin:0; color:#d7e3f2; }
+  h2 { font-size: 16pt; color: var(--blue); border-bottom: 2px solid var(--line); padding-bottom: 3px; margin: 22px 0 8px; break-after: avoid; }
+  h3 { font-size: 12.5pt; color: var(--gold); margin: 14px 0 4px; break-after: avoid; }
+  p, li { margin: 4px 0; }
+  ul, ol { padding-left: 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 10pt; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  .note { background:#fff8e6; border-left: 4px solid var(--gold); padding: 6px 10px; margin: 8px 0; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  code, kbd { font-family: Consolas, monospace; background: #eef2f7; padding: 0 4px; border-radius: 3px; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 9.5pt; border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+<header class="cover">
+  <h1>BT3 Tag Team</h1>
+  <p>Manual del jugador para la versi&oacute;n independiente de Windows (Preview 0.1). Dragon Ball Z: Budokai Tenkaichi 3, Power Scale BETA 1.5.1, con el mod Tag Team integrado.</p>
+</header>
+
+<div class="note"><b>Versi&oacute;n Preview.</b> Algunas funciones se siguen terminando. La lista de l&iacute;mites conocidos est&aacute; en la secci&oacute;n 12. Es un proyecto de fans no oficial, sin relaci&oacute;n con los due&ntilde;os de Dragon Ball ni de Budokai Tenkaichi. Los archivos del juego no se incluyen: se importan desde tu propia imagen de disco.</div>
+
+<h2>Contenido</h2>
+<ol class="toc">
+  <li><a href="#start">Primeros pasos</a></li>
+  <li><a href="#modes">Modos de juego</a></li>
+  <li><a href="#controls">Controles y mandos</a></li>
+  <li><a href="#hud">El HUD y los marcadores sobre los luchadores</a></li>
+  <li><a href="#fusion">Fusi&oacute;n</a></li>
+  <li><a href="#cpu">T&aacute;cticas de la CPU</a></li>
+  <li><a href="#revive">Revivir compa&ntilde;eros</a></li>
+  <li><a href="#more">Cinem&aacute;ticas, gigantes, luchadores, espectador y entrenamiento</a></li>
+  <li><a href="#settings">Referencia de ajustes</a></li>
+  <li><a href="#saves">Partidas guardadas, datos y desinstalaci&oacute;n</a></li>
+  <li><a href="#trouble">Problemas frecuentes</a></li>
+  <li><a href="#known">L&iacute;mites conocidos de esta versi&oacute;n</a></li>
+  <li><a href="#credits">Cr&eacute;ditos</a></li>
+</ol>
+
+<h2 id="start">1. Primeros pasos</h2>
+<ol>
+  <li><b>Instalar.</b> Ejecuta <code>BT3-TagTeam-...-Setup.exe</code>. Se instala solo para tu usuario (sin permisos de administrador). Elige la carpeta en la p&aacute;gina de destino: los datos del juego (disco importado, partidas, ajustes) quedan en una carpeta <code>data</code> dentro de ella. La versi&oacute;n no est&aacute; firmada digitalmente, as&iacute; que Windows SmartScreen puede avisar: pulsa <b>M&aacute;s informaci&oacute;n</b> y luego <b>Ejecutar de todas formas</b>.</li>
+  <li><b>Importar tu disco.</b> En el primer inicio, elige tu imagen de disco <b>Power Scale BETA 1.5.1</b>. El juego la comprueba, ampl&iacute;a los mapas al doble de tama&ntilde;o y prepara el arte de la interfaz. Reserva unos minutos y unos 12 GB libres en la unidad de instalaci&oacute;n. Tu imagen de disco nunca se modifica.</li>
+  <li><b>Partidas guardadas.</b> El instalador pregunta si quieres empezar con <i>todo el contenido desbloqueado</i> o con una partida nueva de progreso normal. Una partida existente nunca se sobrescribe.</li>
+  <li><b>Jugar.</b> Tras los cr&eacute;ditos, pulsa el bot&oacute;n de cambio de men&uacute; del men&uacute; principal original para abrir los men&uacute;s del mod y elegir un modo.</li>
+</ol>
+
+<h2 id="modes">2. Modos de juego</h2>
+<table>
+  <tr><th>Modo</th><th>Qu&eacute; es</th></tr>
+  <tr><td>Batalla por equipos</td><td>Equipo 1 contra Equipo 2, hasta 5 luchadores por lado (cualquier combinaci&oacute;n como 1v1, 2v3 o 5v5), con 1 a 4 jugadores humanos asignados a los equipos.</td></tr>
+  <tr><td>Todos contra todos</td><td>Cada luchador contra todos los dem&aacute;s, hasta 10 luchadores, humanos y CPU. Los carteles Ready y FIGHT salen antes del inicio.</td></tr>
+  <tr><td>Cooperativo</td><td>Los humanos luchan juntos contra enemigos controlados por la CPU.</td></tr>
+  <tr><td>Entrenamiento modificado</td><td>De uno a cuatro jugadores practican contra una CPU que se queda quieta o contraataca, con recarga de salud, ki y reservas.</td></tr>
+  <tr><td>Acerca de / Cr&eacute;ditos</td><td>Nombres y enlaces de las personas detr&aacute;s del proyecto.</td></tr>
+</table>
+<p>Tras elegir un modo escoges luchadores en la pantalla de selecci&oacute;n. Con dos o m&aacute;s humanos, una pantalla de preparaci&oacute;n permite asignar jugadores a equipos y, si hace falta, asignar mandos. Volver a luchar mantiene los mismos equipos y ajustes.</p>
+
+<h2 id="controls">3. Controles y mandos</h2>
+<ul>
+  <li>Se aplican los <b>controles est&aacute;ndar de Budokai Tenkaichi 3</b>: <kbd>R3</kbd> abre la lista de transformaciones y <kbd>Start</kbd> pausa.</li>
+  <li><b>Fijar objetivo.</b> Toca <kbd>L3</kbd> para pasar al siguiente objetivo. Mant&eacute;n <kbd>L3</kbd> (0,5 s por defecto) para soltar el objetivo; t&oacute;calo de nuevo para apuntar al enemigo m&aacute;s cercano al centro de tu vista. Los botones y el tiempo de pulsaci&oacute;n se cambian en <i>Ajustes, Controles</i>.</li>
+  <li>Los <b>jugadores 1 y 2</b> usan los mandos o el teclado indicados en la superposici&oacute;n del runtime. Pulsa <kbd>Shift</kbd>+<kbd>Tab</kbd> en el juego para abrirla y usa la pesta&ntilde;a <b>Mandos</b> para elegir un dispositivo por jugador, reasignar botones y probarlos.</li>
+  <li>Los <b>jugadores 3 y 4</b> usan sus propios mandos. Se est&aacute;n a&ntilde;adiendo las opciones nativas de asignaci&oacute;n para los jugadores 3 y 4 en la superposici&oacute;n.</li>
+  <li><b>Cambio de men&uacute;.</b> Un bot&oacute;n del men&uacute; principal original abre y cierra los men&uacute;s del mod (se define en <i>Ajustes, Men&uacute;s</i>).</li>
+</ul>
+
+<h2 id="hud">4. El HUD y los marcadores sobre los luchadores</h2>
+<p>El mod puede sustituir los paneles originales de las esquinas por peque&ntilde;os marcadores transl&uacute;cidos sobre los luchadores, para que la vista quede despejada.</p>
+<table>
+  <tr><th>Ajuste</th><th>Opciones</th></tr>
+  <tr><td>Estilo de HUD</td><td><b>HUD del juego + marcadores</b> mantiene el HUD original. <b>Solo marcadores</b> oculta por completo el HUD original; los marcadores llevan entonces la vida, el ki, las reservas de ki, el estado de transformaci&oacute;n o carga y el temporizador de fusi&oacute;n.</td></tr>
+  <tr><td>Forma</td><td>Hex&aacute;gono (por defecto), Anillo, Placa o Ninguna. El borde de la forma es el medidor: vida en verde (rojo si es baja) y ki en azul.</td></tr>
+  <tr><td>Nivel de detalle</td><td>Solo 1P, 1P y objetivo, 1P, objetivo y aliados, o <b>Todos</b> (cada luchador en pantalla, enemigos incluidos, en tama&ntilde;o menor).</td></tr>
+  <tr><td>Nombres</td><td>No (por defecto), Peque&ntilde;os o Normales, bajo el marcador.</td></tr>
+  <tr><td>Reservas de ki, retratos</td><td>Los puntos de reservas y un retrato dentro de la forma se pueden activar o desactivar por separado.</td></tr>
+  <tr><td>Tama&ntilde;o y opacidad</td><td>Escala 50, 65, 80, 100 o 120 por ciento; opacidad 30, 50, 70 o 100 por ciento. Hay l&iacute;mites m&aacute;ximos para que los marcadores nunca tapen el combate.</td></tr>
+  <tr><td>Lista de participantes</td><td>Lista desactivada, compacta o completa para todos contra todos y partidas grandes.</td></tr>
+  <tr><td>Otros interruptores</td><td>Barras de salud de aliados y enemigos, el registro de bajas, la puntuaci&oacute;n de bajas, el estilo del HUD en pantalla dividida y los retratos.</td></tr>
+</table>
+<p>Los marcadores se desvanecen y se reducen durante las cinem&aacute;ticas y se ocultan con el juego en pausa. Tu marcador y el de tu objetivo comparten el mismo aspecto; solo cambia el color de acento.</p>
+
+<h2 id="fusion">5. Fusi&oacute;n</h2>
+<p>Hay dos tipos de fusi&oacute;n. Las de <b>Baile de Fusi&oacute;n</b> son <i>temporizadas</i>; las de <b>Pothala</b> (por ejemplo Vegetto) son permanentes. Para fusionarte, abre la lista de transformaciones con <kbd>R3</kbd>, elige la entrada de fusi&oacute;n y confirma con la combinaci&oacute;n de botones que muestra el men&uacute;. Tu pareja ver&aacute; entonces un peque&ntilde;o aviso <b>R3 FUSE</b> sobre su luchador para aceptar.</p>
+<h3>Qui&eacute;n controla una fusi&oacute;n compartida</h3>
+<p>Cuando dos humanos comparten una fusi&oacute;n, <i>P1</i> y <i>P2</i> significan el primer y el segundo fusionador, sea cual sea el par de asientos. Elige uno de seis modos en <i>Ajustes, Fusi&oacute;n</i>:</p>
+<ol>
+  <li><b>Alternar control:</b> el control completo pasa entre los dos jugadores a intervalos fijos.</li>
+  <li><b>P1 ataca, P2 se mueve.</b></li>
+  <li><b>P2 ataca, P1 se mueve.</b></li>
+  <li><b>Alternar roles:</b> los roles de movimiento y ataque se intercambian en cada intervalo.</li>
+  <li><b>P1 lo hace todo.</b></li>
+  <li><b>P2 lo hace todo.</b></li>
+</ol>
+<p>El intervalo puede ser 5, 10, 15, 20 (por defecto), 30, 45 o 60 segundos. El primer cambio ocurre un intervalo completo despu&eacute;s de empezar la fusi&oacute;n. Los temporizadores se detienen con la pausa del juego y con las cinem&aacute;ticas.</p>
+<h3>Duraci&oacute;n de la fusi&oacute;n y desgaste por forma</h3>
+<p>Si la <b>duraci&oacute;n de la fusi&oacute;n</b> est&aacute; activada, una fusi&oacute;n de Baile de Fusi&oacute;n termina pasado el tiempo indicado. Con el <b>desgaste por forma</b> activado, las formas superiores consumen ese tiempo m&aacute;s r&aacute;pido. La fusi&oacute;n tiene una barra de vida que baja a una velocidad que depende de la forma actual; cambiar de forma cambia la velocidad desde ese momento y nunca devuelve ni reinicia el tiempo gastado. Al terminar una transformaci&oacute;n siempre tienes al menos un segundo en la nueva forma.</p>
+<table>
+  <tr><th>Preajuste</th><th>Tiempo perdido por paso de forma (1.&ordf; a 5.&ordf; forma)</th></tr>
+  <tr><td>Suave</td><td>5, 10, 15, 20, 25 por ciento</td></tr>
+  <tr><td>Normal</td><td>10, 20, 30, 40, 50 por ciento</td></tr>
+  <tr><td>Fuerte</td><td>20, 35, 50, 60, 70 por ciento</td></tr>
+</table>
+<h3>Indicadores de fusi&oacute;n en pantalla</h3>
+<p>Peque&ntilde;os arcos sobre el luchador fusionado muestran el tiempo restante de la fusi&oacute;n (dorado, amarillo por debajo de 10 segundos con un n&uacute;mero, rojo por debajo de 3) y el tiempo hasta el siguiente cambio de control, con marcadores P1 y P2 y s&iacute;mbolos de movimiento o ataque. Las fusiones permanentes no muestran temporizador.</p>
+
+<h2 id="cpu">6. T&aacute;cticas de la CPU</h2>
+<p>Por defecto la CPU se comporta como en el juego original. <i>Ajustes, T&aacute;cticas de la CPU</i> permite que las CPU aliadas y enemigas se transformen m&aacute;s. Los ajustes tienen &aacute;mbitos separados: <b>Aliados</b> (el primer equipo) y <b>Enemigos</b>; en todos contra todos todas las CPU cuentan como enemigas.</p>
+<ul>
+  <li><b>Nativo:</b> la IA original, sin cambios.</li>
+  <li><b>M&aacute;s a menudo:</b> la CPU usa antes sus transformaciones disponibles en lugar de esperar al azar original.</li>
+  <li><b>Cuando va en desventaja:</b> la CPU se transforma cuando parece m&aacute;s d&eacute;bil que su rival: poca salud, d&eacute;ficit de ki, da&ntilde;o reciente y el nivel de forma revisado del rival.</li>
+  <li><b>Preajuste:</b> Nativo, Agresivo o Implacable. Un preajuste m&aacute;s agresivo usa umbrales m&aacute;s bajos y esperas m&aacute;s cortas entre transformaciones planificadas (de unos 8 segundos a unos 3).</li>
+</ul>
+<p>El planificador nunca se salta las reglas del juego: los costes de reservas, las excepciones por personaje de la p&aacute;gina Luchadores, las restricciones de gigantes y el l&iacute;mite de probabilidad siguen aplic&aacute;ndose. La revivici&oacute;n por la CPU y la fusi&oacute;n aut&oacute;noma de la CPU no forman parte de este ajuste en esta versi&oacute;n; la CPU a&uacute;n puede fusionarse con la IA original.</p>
+
+<h2 id="revive">7. Revivir compa&ntilde;eros</h2>
+<p>Activa <i>Ajustes, Revivir</i> para recuperar compa&ntilde;eros ca&iacute;dos. Qu&eacute;date dentro del c&iacute;rculo de un aliado ca&iacute;do durante el tiempo indicado (4 segundos por defecto). Moverte y burlarte mantiene el progreso; recibir da&ntilde;o o salir del c&iacute;rculo lo interrumpe. Revivir cuesta reservas de ataque (4 por defecto), no ki, y devuelve la salud indicada. Un arco nativo sobre el luchador ca&iacute;do se llena mientras canalizas, con el coste en reservas como peque&ntilde;os puntos y estados claros de completado, cancelado y reservas insuficientes. No hay revivici&oacute;n en todos contra todos.</p>
+
+<h2 id="more">8. Cinem&aacute;ticas, gigantes, luchadores, espectador y entrenamiento</h2>
+<ul>
+  <li><b>Cinem&aacute;ticas:</b> elige qui&eacute;n se detiene en los ataques especiales, si las transformaciones usan una vista compartida o enmarcan cada mitad en pantalla dividida, y si se reproducen las intros de luchadores extra.</li>
+  <li><b>Gigantes:</b> los gigantes mayores escalan las formas gigantes del juego. El tama&ntilde;o, la velocidad de ataque, el da&ntilde;o, la resistencia al aturdimiento y la distancia de c&aacute;mara solo se aplican con los gigantes mayores activados.</li>
+  <li><b>Luchadores:</b> intercambio de cuerpo de Ginyu y habilidades robadas, voces extra, y los interruptores, el l&iacute;mite de probabilidad y las excepciones por personaje de las transformaciones de la CPU.</li>
+  <li><b>Espectador:</b> un humano derrotado puede observar a otros luchadores y tomar el control de un compa&ntilde;ero CPU vivo, nunca de un enemigo, y no en todos contra todos.</li>
+  <li><b>Entrenamiento:</b> el entrenamiento modificado admite de uno a cuatro jugadores. La salud, el ki y las reservas se recargan tras una espera; con la recarga de salud desactivada, una derrota puede terminar la sesi&oacute;n.</li>
+</ul>
+
+<h2 id="settings">9. Referencia de ajustes</h2>
+<p>Abre el men&uacute; del mod y entra en Ajustes. La mayor&iacute;a se aplica desde la siguiente partida; volver a luchar mantiene los ajustes de esa partida. P&aacute;ginas:</p>
+<table>
+  <tr><th>P&aacute;gina</th><th>Qu&eacute; controla</th></tr>
+  <tr><td>Men&uacute;s</td><td>Idioma (ingl&eacute;s o espa&ntilde;ol), bot&oacute;n de cambio de men&uacute; del mod, velocidad de la animaci&oacute;n de carga, la cubierta decorativa de carga.</td></tr>
+  <tr><td>Selecci&oacute;n de personajes</td><td>Luchadores propios por humano, todos los mandos sobre el cursor, etiquetas de jugador.</td></tr>
+  <tr><td>Controles</td><td>Botones de cambio y suelta de objetivo y tiempos de pulsaci&oacute;n.</td></tr>
+  <tr><td>Cinem&aacute;ticas</td><td>Pausa de ataque especial, cinem&aacute;ticas de ultimate, transformaci&oacute;n y ataque r&aacute;pido, vista en pantalla dividida, intros extra.</td></tr>
+  <tr><td>Fusi&oacute;n</td><td>Modo de control, segundos de cambio, aviso y temporizadores, duraci&oacute;n de la fusi&oacute;n, desgaste por forma y sus preajustes.</td></tr>
+  <tr><td>T&aacute;cticas de la CPU</td><td>Transformaciones de la CPU aliada y enemiga y el preajuste.</td></tr>
+  <tr><td>Luchadores, Gigantes</td><td>Opciones por personaje y globales; gigantes mayores y su ajuste.</td></tr>
+  <tr><td>HUD, HUD de pantalla dividida</td><td>Marcadores sobre luchadores, HUD original, barras de salud, registro de bajas; estilos de panel para pantalla dividida.</td></tr>
+  <tr><td>Espectador, Revivir, Entrenamiento</td><td>Como se describe arriba.</td></tr>
+  <tr><td>Opciones de inicio</td><td>Opciones que requieren reinicio (el juego muestra <b>Reinicio necesario</b> con un bot&oacute;n <b>Reiniciar ahora</b>).</td></tr>
+  <tr><td>Diagn&oacute;stico</td><td>Archivos opcionales de depuraci&oacute;n; pueden ser grandes.</td></tr>
+</table>
+
+<h2 id="saves">10. Partidas guardadas, datos y desinstalaci&oacute;n</h2>
+<ul>
+  <li>Todo lo que crea el juego (datos importados, partidas, ajustes, registros) est&aacute; en la carpeta <code>data</code> dentro de la carpeta de instalaci&oacute;n.</li>
+  <li>Reinstalar o actualizar conserva tus datos y no repite la importaci&oacute;n.</li>
+  <li>Desinstalar conserva todos los datos del juego por defecto. Tiene dos opciones sin marcar: borrar los datos del juego y, por separado, borrar tus partidas. Las partidas nunca se borran en silencio.</li>
+  <li>Tu imagen de disco original nunca se toca.</li>
+</ul>
+
+<h2 id="trouble">11. Problemas frecuentes</h2>
+<table>
+  <tr><th>Problema</th><th>Qu&eacute; hacer</th></tr>
+  <tr><td>"Ese disco no es compatible"</td><td>La imagen no es la versi&oacute;n exacta de Power Scale BETA 1.5.1. Usa la imagen correcta.</td></tr>
+  <tr><td>Espacio insuficiente</td><td>La importaci&oacute;n necesita unos 12 GB libres en la unidad de instalaci&oacute;n. Libera espacio o instala en otra unidad.</td></tr>
+  <tr><td>"La preparaci&oacute;n de la partida fall&oacute;"</td><td>Cierra el juego y vuelve a abrirlo; luego int&eacute;ntalo de nuevo. Anota los personajes de la partida y env&iacute;alos con el registro (ver abajo).</td></tr>
+  <tr><td>Escena 3D negra tras una fusi&oacute;n o transformaci&oacute;n</td><td>Deja la partida en marcha unos 10 segundos para que el diagn&oacute;stico la capture; luego cierra el juego e inf&oacute;rmalo.</td></tr>
+  <tr><td>Lento en partidas grandes</td><td>El 5v5 funciona ahora a unas 20 a 30 actualizaciones por segundo en un Ryzen 5700G; las partidas peque&ntilde;as llegan a 60. Cierra otros programas pesados.</td></tr>
+  <tr><td>Un ajuste no se aplic&oacute;</td><td>La mayor&iacute;a se aplica desde la siguiente partida. Las opciones de inicio necesitan reinicio.</td></tr>
+</table>
+<p>Los registros est&aacute;n en la carpeta <code>data</code>. Al informar de un problema, incluye el registro y di qu&eacute; estabas haciendo; los registros no contienen rutas personales.</p>
+
+<h2 id="known">12. L&iacute;mites conocidos de esta versi&oacute;n</h2>
+<ul>
+  <li>La fusi&oacute;n entre Goku Black (Rose) y Zamasu puede no iniciarse a&uacute;n, y Super Goku y Super Vegeta pueden no emparejarse entre s&iacute; todav&iacute;a.</li>
+  <li>La fusi&oacute;n de la CPU elige siempre el mismo resultado para una pareja (por ejemplo Vegetto); est&aacute; prevista una elecci&oacute;n entre resultados.</li>
+  <li>La cubierta de carga entre el men&uacute; del mod y la selecci&oacute;n de personajes y la pantalla de preparaci&oacute;n de 2 jugadores se est&aacute;n corrigiendo.</li>
+  <li>Solo Windows. La versi&oacute;n de Android todav&iacute;a se est&aacute; investigando.</li>
+  <li>Algunas opciones heredadas de la versi&oacute;n de emulador (parche panor&aacute;mico, carga r&aacute;pida del disco, velocidad de CPU emulada) no se aplican a esta versi&oacute;n.</li>
+</ul>
+
+<h2 id="credits">13. Cr&eacute;ditos</h2>
+<p><b>Power Scale:</b> LetsPlayBt3 (https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw)<br>
+<b>Mod Tag Team:</b> The Mufti (https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A)<br>
+<b>Agradecimiento especial</b> a RidJuampa por ayudarme a entender el c&oacute;digo.</p>
+
+<footer>BT3 Tag Team, Preview 0.1. Las licencias de terceros est&aacute;n en el archivo THIRD_PARTY_NOTES de la carpeta de instalaci&oacute;n.</footer>
+</body>
+</html>

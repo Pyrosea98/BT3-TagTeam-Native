@@ -1,0 +1,20 @@
+BT3 Tag Team — Initial Windows build 0.1
+
+Power Scale: LetsPlayBt3
+https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw
+Tag Team: The Mufti
+https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A
+
+Special thanks to RidJuampa for helping me understand the code.
+Agradecimiento especial a RidJuampa por ayudarme a entender el codigo.
+
+Import the Power Scale BETA 1.5.1 disc image you own.
+Importa el disco Power Scale BETA 1.5.1 que posees.
+No disc images, interface art or BIOS are included.
+No se incluyen discos, arte del juego ni BIOS.
+A starting progress save is included; an existing save is never overwritten.
+Se incluye una partida con progreso; nunca se reemplaza una partida existente.
+
+Native runtime: BT3-Recomp and its bundled third-party notices.
+Temporary embedded controller: CPython, Pillow, pycdlib and psutil.
+Font licences are included in notices; no system Python is installed.

@@ -1,0 +1,29 @@
+﻿BT3 Tag Team: Preview 0.1 (Windows)
+
+IMPORTANTE. Lee esto antes de instalar.
+
+Este es un proyecto de fans no oficial. No tiene relación con los dueños de Dragon Ball ni de Budokai Tenkaichi, ni cuenta con su respaldo o patrocinio.
+
+QUÉ ES
+Dragon Ball Z: Budokai Tenkaichi 3 (Power Scale BETA 1.5.1) funcionando de forma nativa en Windows, con el mod Tag Team integrado. No hace falta un emulador ni instalar Python por separado.
+
+QUÉ DEBES APORTAR
+Debes tener tu propia copia de la imagen de disco Power Scale BETA 1.5.1. Este instalador no incluye discos del juego, archivos del juego, arte de la interfaz ni BIOS. La primera vez que ejecutes el juego, este comprueba tu imagen de disco, crea una copia ampliada dentro de la carpeta de datos del juego y prepara el arte de la interfaz a partir de ella. Tu imagen de disco original nunca se modifica.
+
+TUS DATOS
+Todo lo que crea el juego (datos importados, partidas guardadas, ajustes, registros) se guarda en la carpeta "data" dentro de la carpeta de instalación. Se incluye una partida inicial (tú eliges si empieza con todo el contenido desbloqueado); una partida existente nunca se sobrescribe. Al desinstalar se conservan tus datos del juego, salvo que marques la opción de borrarlos. No se recopilan datos personales y no se envía nada por la red.
+
+SIN GARANTÍA
+Esta es una versión preliminar. Se ofrece "tal cual", sin garantía de ningún tipo, y puede contener errores. Úsala bajo tu propia responsabilidad.
+
+CRÉDITOS
+Power Scale: LetsPlayBt3
+https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw
+Mod Tag Team: The Mufti
+https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A
+Agradecimiento especial a RidJuampa por ayudarme a entender el código.
+
+SOFTWARE DE TERCEROS
+Esta versión incluye un runtime nativo (BT3-Recomp) y un controlador temporal incorporado basado en CPython, Pillow, pycdlib, psutil y otras bibliotecas de código abierto. Sus licencias figuran en el archivo THIRD_PARTY_NOTES y en la carpeta notices de la carpeta de instalación. Las fuentes se usan bajo sus propias licencias abiertas.
+
+Al continuar confirmas que eres propietario de la imagen de disco que vas a importar y que aceptas estos términos.

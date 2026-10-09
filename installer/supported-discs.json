@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "discs": [
+    {
+      "sha256": "f3e495b8eb2269c2808f00352058d0be6facf3db4bf1c013f2d78ea2a531c6d3",
+      "size": 4196335616,
+      "title": "Power Scale BETA 1.5.1",
+      "region": "USA",
+      "adapter_id": "power-scale-1.5.1",
+      "expanded": false
+    },
+    {
+      "sha256": "e26dbbe6cfb75d7e407f7d197330b270de47b50ac83920ba435f946868a0390e",
+      "size": 4196335616,
+      "title": "Power Scale BETA 1.5.1 \u00b7 Expanded 2x",
+      "region": "USA",
+      "adapter_id": "power-scale-1.5.1",
+      "expanded": true
+    }
+  ]
+}

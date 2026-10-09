@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "iso": "C:\\Users\\JUAN\\Downloads\\Tag Team Mod Installer 2\\experiments\\.full-install\\game\\maps\\expanded-2x.iso",
+  "adapter": "bt3-usa",
+  "iso_sha256": "f3e495b8eb2269c2808f00352058d0be6facf3db4bf1c013f2d78ea2a531c6d3",
+  "members": {
+    "/SYSTEM.CNF;1": "7d48dc9bc71005bfcc4c2f136ae80a5362b006c2a554ca6aad6165639a0f79af",
+    "/SLUS_216.78;1": "b8ac3756da720f8a6fa3f9ab77a3c54f13f0735b159ad9098860e744dd9732f7",
+    "/BIN/DBZP.BIN;1": "038c002ad24dcbd88ae6e8868006fe2eb7cdab06f482525514fef3e708b205f7"
+  },
+  "serial": "SLUS_216.78",
+  "pcsx2_crc": "9ACFE2DC",
+  "runtime_variant": "BT3 Power Scale BETA 1.5.1 (experimental)",
+  "audit": "C:\\Users\\JUAN\\Downloads\\Tag Team Mod Installer 2\\experiments\\.full-install\\compatibility-profiles\\f3e495b8eb2269c2808f00352058d0be6facf3db4bf1c013f2d78ea2a531c6d3.md",
+  "gameplay_verified": false
+}

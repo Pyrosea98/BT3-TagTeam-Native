@@ -1,0 +1,29 @@
+﻿BT3 Tag Team: Preview 0.1 (Windows)
+
+IMPORTANT. Please read before installing.
+
+This is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by the owners of Dragon Ball or Budokai Tenkaichi.
+
+WHAT IT IS
+Dragon Ball Z: Budokai Tenkaichi 3 (Power Scale BETA 1.5.1) running natively on Windows, with the Tag Team mod built in. No emulator and no separate Python installation are needed.
+
+WHAT YOU NEED TO PROVIDE
+You must have your own copy of the Power Scale BETA 1.5.1 disc image. No game discs, game files, interface art or BIOS are included in this installer. The first time you run the game it checks your disc image, builds an expanded copy of it inside the game's data folder and prepares the interface art from it. Your original disc image is never modified.
+
+YOUR DATA
+Everything the game creates (imported data, saves, settings, logs) is stored in the "data" folder inside the install folder. A starting save is included (you choose whether it starts with all content unlocked); an existing save is never overwritten. Uninstalling keeps your game data unless you tick the option to remove it. No personal data is collected and nothing is sent over the network.
+
+NO WARRANTY
+This is a preview. It is provided "as is", without warranty of any kind, and may contain bugs. Use it at your own risk.
+
+CREDITS
+Power Scale: LetsPlayBt3
+https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw
+Tag Team mod: The Mufti
+https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A
+Special thanks to RidJuampa for helping me understand the code.
+
+THIRD-PARTY SOFTWARE
+This build includes a native runtime (BT3-Recomp) and a temporary embedded controller built on CPython, Pillow, pycdlib, psutil and other open-source libraries. Their licences are listed in the THIRD_PARTY_NOTES file and the notices folder in the install folder. Fonts are used under their own open licences.
+
+By continuing you confirm that you own the disc image you will import and that you accept these terms.

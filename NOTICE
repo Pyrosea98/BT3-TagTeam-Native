@@ -1,0 +1,20 @@
+BT3 Tag Team Native
+Copyright (C) 2026 BT3 Tag Team Native contributors
+
+This project's original code is licensed under GPL-3.0-only. See LICENSE.
+
+Derived work: the files under controller/ are derived from the Tag Team Mod
+(https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-),
+Copyright (C) 2026 Tag Team Mod contributors, GPL-3.0-only, and were modified
+for the native runtime. Modified files are marked by this notice and by the
+repository history.
+
+Third-party software, fonts and assets retain their own licences:
+see THIRD_PARTY_NOTICES.md and the licence files beside the fonts in fonts/.
+
+This repository contains no game disc images, PS2 BIOS, game executables,
+extracted game assets, player saves, captured RAM or developer logs.
+Game data is read from the user's own disc image at import time.
+
+This is an unofficial fan project. Dragon Ball and game-related names and
+marks belong to their respective owners. No endorsement is implied.
