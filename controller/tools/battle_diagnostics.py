@@ -40,6 +40,7 @@ def snapshot(p):
         model=u(core.MODELS+4*v(12));row=0x9A4+164*min(v(0x994),4)
         item=dict(physical=physical,address=actor,controller=v(4),team=v(8),model_id=v(12),
                   actions=[v(off) for off in range(2376,2404,4)],health=v(row+64),character=v(row),
+                  ki=v(row+76),stocks=v(row+84),
                   flags=data[0x1080:0x10D8].hex(),stops=[v(off) for off in range(4896,4912,4)],
                   pair=[v(3732),v(3736)],input=[v(off) for off in range(0x1278,0x1288,4)],
                   position=list(struct.unpack_from('<4f',data,16)),model=model)

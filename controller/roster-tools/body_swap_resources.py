@@ -70,7 +70,7 @@ def io_memory(ram, snapshot, physical):
     for p,n in (RANGE(0x2654D8,0x58),(A(0x26B5E8),0x38),(A(0x26AA40),0x38),
                 (A(0x2554D8),0x30),(A(0x255508),0x68),(A(0x24B238),0x60),
                 (A(0x265298),0x180),(A(0x255BD8),0x28),(A(0x255B88),0x50),(A(0x255978),0x68)):
-        require(ram[p:p+n]==swap.NATIVE(p,n),f'Native body IO helper changed:{p:08X}')
+        require(preload.native_io_helper_matches(ram,swap.NATIVE,p,n),f'Native body IO helper changed:{p:08X}')
     values=dict(ENTRY=IO,INNER=INNER,QUEUE=QUEUE,CONTROL=IO_CONTROL)
     capacities=NATIVE_CAPACITIES if physical<2 else None
     entry=preload.core.rebound(io.entry_code,**values)()

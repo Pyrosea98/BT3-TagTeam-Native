@@ -550,6 +550,8 @@ class Autopilot:
         self.mode_menu = None
         from battle_diagnostics import Recorder
         self.battle_diagnostics = Recorder()
+        from beam_assist_diagnostics import Recorder as BeamRecorder
+        self.beam_diagnostics = BeamRecorder()
         self.heartbeat = None      # (packet count, time it last changed)
         self.heartbeat_read = None # when the match's freeze watch last read it (WATCH_GAP)
         self.heartbeat_gap = False # a gap was already left out of the current stall (WATCH_GAP)
@@ -1865,6 +1867,8 @@ class Autopilot:
         says how to turn them on for the next time.
         """
         if obs.status != 'running' or obs.battle_state != 3:
+            if obs.battle_state != 3:
+                self.beam_diagnostics.finish(log)
             self.heartbeat = None
             return
         stall = target = None
@@ -1875,6 +1879,7 @@ class Autopilot:
                     self.heartbeat = None
                     return
                 self.watch_holds(p)
+                self.beam_diagnostics.tick(p, log, clock)
                 count = p.read_u32(FRAME_HEARTBEAT)
                 if self.diagnostic_settings['record_battle_diagnostics']:
                     self.battle_diagnostics.tick(p,self.freeze_folder()/'battle-diagnostics.json',clock)
