@@ -107,12 +107,22 @@ def main():
                 if not (TOOLS.parent/directory/asset.name).is_file():
                     raise FileNotFoundError(TOOLS.parent/directory/asset.name)
     env=os.environ.copy();env.update(PS2X_CD_IMAGE=str(ISO),PS2X_TAGTEAM_PORT=str(PORT),PS2X_TAGTEAM_BOOT=str(TRIAL/'tagteam-bootstrap.pnach'),PS2X_MODS='0',PS2X_PGS='0',PS2X_SEAMVK='0')
+    if os.environ.get('PS2X_PACKAGE_DATA'):
+        # The runtime otherwise redirects native stderr into runtime-data/logs.
+        # Give it an explicit, writable diagnostic file beside the runner log.
+        env['PS2X_LOGFILE']=str(TRIAL/'native-stderr.log')
     if env.get('BT3_PREVIEW_DIAGNOSTICS','1')=='1':
         env.setdefault('PS2X_EXIT_CAPTURE_DIR',str(TRIAL/'guest-exit-captures'))
     else:
         env.pop('PS2X_EXIT_CAPTURE_DIR',None)
     if options.renderer!='opengl':
         env.update(PS2X_VK_NATIVE='1',PS2X_PGS='1',PS2X_PGS_EXCLUSIVE='1',PS2X_SEAMVK='1' if options.renderer=='native-vulkan' else '0')
+    else:
+        # Some flags are enabled by presence, even when their value is "0".
+        # A GL edition must not inherit a previous Vulkan/D3D selection.
+        for flag in ('PS2X_VK_NATIVE','PS2X_PGS_EXCLUSIVE','PS2X_D3D11','PS2X_ALTGL'):
+            env.pop(flag,None)
+        env['PS2X_GPU']='1'
     if options.no_controller:env['PS2X_TAGTEAM_BOOT_SNAPSHOT']=str(TRIAL/'boot-ram.bin')
     log=TRIAL/'runner.log'
     with log.open('wb') as output:
@@ -228,6 +238,9 @@ def main():
             print(f'Native trial stopped: {process.returncode}; {log}',flush=True)
     # The runtime can stop cleanly after an interpreter failure (exit code 0).
     # Preserve the actual cause in the visible launcher instead of closing it.
+    status=(process.returncode or 0)&0xffffffff
+    if status&0xc0000000==0xc0000000:
+        raise RuntimeError(f'Native game crashed (Windows 0x{status:08X}). Native log: {TRIAL / "native-stderr.log"}; crash report: {EXE.parent / "logs/wincrash.txt"}')
     with log.open('rb') as stream:
         stream.seek(max(0,log.stat().st_size-65536))
         tail=stream.read().decode('utf-8',errors='replace')

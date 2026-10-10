@@ -1,5 +1,5 @@
 """Initial app shell; all Python is embedded temporarily and hidden."""
-import hashlib,json,os,shutil,subprocess,sys,threading,uuid
+import contextlib,hashlib,json,os,platform,shutil,subprocess,sys,threading,traceback,uuid
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog,messagebox,ttk
@@ -149,10 +149,16 @@ def play():
     # This plain in-process file stream avoids Python's None console streams.
     with (DATA/'launcher.log').open('w',encoding='utf-8') as log:
         sys.stdout=sys.stderr=log
-        sys.argv=['Play','--renderer','vulkan'];os.environ['PS2X_PACKAGE_DATA']=str(DATA)
+        edition=APP/'renderer.txt'
+        renderer=edition.read_text(encoding='utf-8-sig').strip() if edition.exists() else 'vulkan'
+        if renderer not in ('vulkan','opengl'):raise RuntimeError('Invalid renderer edition.')
+        print(f'Renderer edition: {renderer}',flush=True)
+        if renderer=='opengl':ui.UI_BUILD='0.2-opengl-preview'
+        sys.argv=['Play','--renderer',renderer];os.environ['PS2X_PACKAGE_DATA']=str(DATA)
         os.environ['PS2X_EXEDIR']=str(HERE/'runtime-data')
         os.environ['PS2X_MC_ROOT']=str(DATA/'saves/progression')
         result=trial.main('ps2EntryRunner-standalone.exe')
+        if result:raise RuntimeError(f'Native game exited with status {result}. See runner.log.')
         request=DATA/'restart-request.json'
         if request.is_file():
             value=json.loads(request.read_text(encoding='utf-8'))
@@ -224,6 +230,27 @@ def main():
     tk.Label(root,text='Power Scale: LetsPlayBt3  ·  Tag Team: The Mufti\nSpecial thanks: RidJuampa  ·  0.2-preview',bg='#0e1428',fg='white',font=('Segoe UI',10)).pack(side='bottom',pady=16)
     root.mainloop()
     return play() if not cancel.is_set() and imported() else 0
-if __name__=='__main__':
-    try:raise SystemExit(main())
-    except Exception as error:messagebox.showerror('BT3 Tag Team',str(error) if isinstance(error,ImportFailure) else ('No se pudo iniciar el juego. Revisa la importación o reinstala la aplicación.' if LANG=='es' else 'The game could not start. Check your import or reinstall the app.'))
+def logged_main():
+    # Capture failures before the controller and its log have even loaded.
+    # Keep the previous attempt too, so a second launch doesn't erase evidence.
+    log_path=DATA/'startup.log'
+    try:
+        DATA.mkdir(parents=True,exist_ok=True)
+        if log_path.exists():log_path.replace(DATA/'startup-previous.log')
+        with log_path.open('w',encoding='utf-8') as log:
+            log.write(json.dumps({'windows':platform.platform(),'python':sys.version,
+                                  'app':str(APP),'data':str(DATA)},indent=2)+'\n');log.flush()
+            with contextlib.redirect_stdout(log),contextlib.redirect_stderr(log):
+                try:return main()
+                except Exception:
+                    traceback.print_exc(file=log);log.flush();raise
+    except Exception as error:
+        if isinstance(error,ImportFailure):message=str(error)
+        else:
+            detail=f'{type(error).__name__}: {error}'
+            if LANG=='es':message=f'No se pudo iniciar el juego.\n\n{detail}\n\nEnvía estos registros para revisar el problema:\n{log_path}\n{DATA / "launcher.log"}\n{HERE / "power-scale-trial/runner.log"}\n{HERE / "power-scale-trial/native-stderr.log"}'
+            else:message=f'The game could not start.\n\n{detail}\n\nSend these logs so we can diagnose the problem:\n{log_path}\n{DATA / "launcher.log"}\n{HERE / "power-scale-trial/runner.log"}\n{HERE / "power-scale-trial/native-stderr.log"}'
+        messagebox.showerror('BT3 Tag Team',message)
+        return 1
+
+if __name__=='__main__':raise SystemExit(logged_main())
