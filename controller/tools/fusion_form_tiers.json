@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "identity": "Power Scale expanded runtime character IDs, not portrait indices",
+  "forms": [
+    {"character_id": 48, "tier": 0, "family": "gotenks", "label": "Base"},
+    {"character_id": 49, "tier": 1, "family": "gotenks", "label": "SSJ1"},
+    {"character_id": 50, "tier": 3, "family": "gotenks", "label": "SSJ3"},
+    {"character_id": 110, "tier": 0, "family": "gogeta", "label": "Base"},
+    {"character_id": 53, "tier": 1, "family": "gogeta", "label": "SSJ1"},
+    {"character_id": 59, "tier": 2, "family": "gogeta", "label": "SSJ2"},
+    {"character_id": 58, "tier": 3, "family": "gogeta", "label": "SSJ3"},
+    {"character_id": 62, "tier": 4, "family": "gogeta", "label": "God"},
+    {"character_id": 54, "tier": 5, "family": "gogeta", "label": "SSJ4"},
+    {"character_id": 219, "tier": 5, "family": "gogeta", "label": "Blue"}
+  ]
+}

@@ -60,7 +60,7 @@ def initialize():
             values['language']=LANG
             settings_path.write_text(json.dumps(values,indent=2),encoding='utf-8')
         marker=DATA/'sources-ready.tmp'
-        marker.write_text(json.dumps({'build':'0.1','revision':revision}),encoding='utf-8')
+        marker.write_text(json.dumps({'build':'0.2-preview','revision':revision}),encoding='utf-8')
         marker.replace(DATA/'sources-ready.json')
 
 def imported():
@@ -145,7 +145,7 @@ def play():
     import codex_ui_slice_trial as trial
     trial.HERE=HERE
     import codex_native_ui_adapter as ui
-    ui.UI_BUILD='Initial 0.1';ui.UI_DISC_HASH=json.loads((DATA/'import/import-receipt.json').read_text(encoding='utf-8'))['disc_sha256']
+    ui.UI_BUILD='0.2-preview';ui.UI_DISC_HASH=json.loads((DATA/'import/import-receipt.json').read_text(encoding='utf-8'))['disc_sha256']
     # This plain in-process file stream avoids Python's None console streams.
     with (DATA/'launcher.log').open('w',encoding='utf-8') as log:
         sys.stdout=sys.stderr=log
@@ -221,7 +221,7 @@ def main():
             root.after(0,root.destroy)
         threading.Thread(target=work,daemon=False).start()
     button=tk.Button(root,text=TEXT[LANG][2],command=choose,bg='#173149',fg='#f5b935',font=('Segoe UI',12));button.pack(pady=8)
-    tk.Label(root,text='Power Scale: LetsPlayBt3  ·  Tag Team: The Mufti\nSpecial thanks: RidJuampa  ·  Initial build 0.1',bg='#0e1428',fg='white',font=('Segoe UI',10)).pack(side='bottom',pady=16)
+    tk.Label(root,text='Power Scale: LetsPlayBt3  ·  Tag Team: The Mufti\nSpecial thanks: RidJuampa  ·  0.2-preview',bg='#0e1428',fg='white',font=('Segoe UI',10)).pack(side='bottom',pady=16)
     root.mainloop()
     return play() if not cancel.is_set() and imported() else 0
 if __name__=='__main__':

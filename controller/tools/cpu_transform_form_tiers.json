@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "identity": "Power Scale runtime IDs; reviewed from actual runtime menu names and captured forward slots; does not authorize fusion recipes",
+  "families": [
+    {
+      "name": "goku_black",
+      "evidence": [
+        "20261008-152903-d77051ee/16-ready-held.bin cid67 slots190:0,192:0",
+        "roster-assets/characters.json runtime labels"
+      ],
+      "forms": [
+        {
+          "character_id": 67,
+          "tier": 0
+        },
+        {
+          "character_id": 190,
+          "tier": 1
+        },
+        {
+          "character_id": 192,
+          "tier": 2
+        }
+      ]
+    },
+    {
+      "name": "vegito",
+      "evidence": [
+        "runner-revive-hud-live.log cid149 slots177:0,122:0,51:0",
+        "roster-assets/characters.json runtime labels Base/SSJ/SSJ3/God/Blue"
+      ],
+      "forms": [
+        {
+          "character_id": 51,
+          "tier": 0
+        },
+        {
+          "character_id": 52,
+          "tier": 1
+        },
+        {
+          "character_id": 149,
+          "tier": 3
+        },
+        {
+          "character_id": 177,
+          "tier": 4
+        },
+        {
+          "character_id": 122,
+          "tier": 5
+        }
+      ]
+    }
+  ],
+  "not_ordinary_transformations": [
+    {
+      "character_id": 194,
+      "reason": "Captured Zamasu has no ordinary destinations; fusion identity195 is not an ordinary same-family tier."
+    },
+    {
+      "character_id": 195,
+      "reason": "Captured fused Zamasu has no ordinary destinations."
+    }
+  ]
+}

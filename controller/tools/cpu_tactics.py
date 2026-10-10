@@ -26,7 +26,9 @@ KEYS = ('cpu_transform_allies', 'cpu_transform_enemies', 'cpu_tactics_preset')
 # Local Power Scale trial candidates. Runtime labels and forward slot costs
 # captured in the 2026-10-09 20:48..20:52 session; live acceptance still pending.
 # Tier order authorizes upgrades only, never a reverse or cross-family slot.
-POWER_SCALE_TRIAL_FAMILIES = ((31,32,33), (60,181,183,184,72), (119,76,167,179,83))
+# v0.2 enables only the added families accepted in live trials. The 31 chain
+# remains on its ordinary admission path until its free-form trial is accepted.
+POWER_SCALE_TRIAL_FAMILIES = ((60,181,183,184,72), (119,76,167,179,83))
 HELP = ('CPU transformations use native stock costs, character exceptions, giant restrictions and chance limits. '
         'Allies means the first player team; free-for-all CPUs are enemies. Native leaves the existing AI unchanged. '
         'When outmatched considers health, ki, recent damage and reviewed form tiers; unknown tiers add no score. '

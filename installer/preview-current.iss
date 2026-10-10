@@ -1,4 +1,4 @@
-#define AppVersion "0.1"
+#define AppVersion "0.2-preview"
 [Setup]
 AppId=BT3TagTeam-initial-0.1
 AppName=BT3 Tag Team
@@ -10,7 +10,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\Play.exe
 SetupIconFile=assets\BT3TagTeam.ico
 OutputDir=output
-OutputBaseFilename=BT3-TagTeam-Preview-0.1-Setup
+OutputBaseFilename=BT3-TagTeam-Preview-0.2-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern dark
