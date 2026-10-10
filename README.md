@@ -8,6 +8,12 @@ Get the Windows installer package from the [v0.2 preview release](https://github
 
 This update includes the Version 11 integration, wider beam assist range and CPU transformation fixes. Mega Instinct Vegeta is restricted for extra fighters; complete roster memory coverage and safe recovery after destructive reload failures remain unfinished. See [the v0.2 changelog](docs/V02_PREVIEW_CHANGELOG.md).
 
+## OpenGL compatibility edition
+
+The separate [v0.2 OpenGL preview](https://github.com/Pyrosea98/BT3-TagTeam-Native/releases/tag/v0.2-opengl-preview) includes the OpenGL game renderer and the native mod menus, loading screens and HUD. Download `BT3-TagTeam-OpenGL-0.2-Setup.exe` for the installer; the release also includes full corresponding source and checksums.
+
+It installs into its own folder with separate data and shortcuts. OpenGL avoids the AMD Vulkan driver path involved in the reported Ryzen 7 5700G startup crash. Rendering, packaged startup and installer checks passed; match acceptance on the affected PC and low-end performance remain pending. See [OpenGL release notes](installer/OPENGL_RELEASE_NOTES.md).
+
 ## Built on The Mufti's Tag Team Mod
 
 This project exists because of **[The Mufti's Tag Team Mod](https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-)** (GPL-3.0), which adds simultaneous fighters, teams, free-for-all, split screen and much more to Budokai Tenkaichi 3 on PCSX2. The game logic in `controller/` comes from that mod and is adapted here to run natively with the Power Scale BETA 1.5.1 roster. If you want the original emulator-based mod, an experimental online mode, Linux builds or the Workbench tools, use the upstream project: [releases](https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-/releases) and [channel](https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A). Please send gameplay credit and thanks there.
