@@ -8,6 +8,51 @@ import fresh_team_combat as core
 from pine import PineError
 
 
+def classify(value, actor):
+    """Mirror gate order against a read-only sample, not an executed receipt."""
+    def result(reason, side=None, **details):
+        return dict(sample_gate=reason, assist_side=side, **details)
+    if not actor['cpu']: return result('human')
+    if not value['assist']: return result('assist-disabled')
+    if not value['cpu']: return result('cpu-assist-disabled')
+    if value['phase'] != 2: return result('coordinator-not-push-phase')
+    physical, address = actor['physical'], actor['address']
+    if address in value['participants']: return result('eligible-struggler')
+    if any(slot['actor'] == address for slot in value['slots']):
+        return result('eligible-pending-or-releasing')
+    present, consumed = value['participation']
+    if not ((present & ~consumed) >> physical) & 1:
+        return result('eligible-not-participating')
+    if actor['hp'] is None: return result('eligible-invalid-hp-row')
+    if actor['hp'] <= 0: return result('eligible-dead')
+    busy = lambda action: any(first <= action < first+length for first, length in struggle.BUSY_ACTIONS)
+    if any(busy(action) for action in actor['actions'][1:]):
+        return result('eligible-busy-requested-or-queued')
+    enemy = lambda other: physical != other and (value['ffa'] or physical % 2 != other % 2)
+    sides = [side for side, index in enumerate(value['participant_indices']) if not enemy(index)]
+    if len(sides) != 1: return result('eligible-no-unique-allied-side')
+    side = sides[0]
+    if all(slot['actor'] for slot in value['slots'][side*4:side*4+4]):
+        return result('eligible-slot-full', side)
+    ally = next((item for item in value['actors'] if item['address'] == value['participants'][side]), None)
+    if not actor.get('model_valid') or not ally or not ally.get('model_valid'):
+        return result('eligible-invalid-model', side)
+    x, y = actor.get('model_position'), ally.get('model_position')
+    if x is None or y is None: return result('eligible-invalid-position', side)
+    distance2 = (x[0]-y[0])**2+(x[2]-y[2])**2
+    if not distance2 < value['range2']:
+        return result('eligible-out-of-range', side, distance2=distance2, range2=value['range2'])
+    if busy(actor['actions'][0]): return result('eligible-busy-current', side)
+    if not actor['schedule_due']: return result('schedule-not-due', side)
+    margin = value['side_word']
+    if (side == 0 and margin > 0) or (side == 1 and margin < 0):
+        return result('lead-rule', side)
+    if actor['stock'] < struggle.STOCK: return result('insufficient-stock', side)
+    if not 304 <= ally['actions'][0] <= 306:
+        return result('register-ally-not-in-struggle-action', side)
+    return result('ready-at-sample', side)
+
+
 def snapshot(p):
     data = p.read(struggle.CONTROL, struggle.SLOTS+8*struggle.SLOT_STRIDE)
     word = lambda off: struct.unpack_from('<I', data, off)[0]
@@ -29,10 +74,14 @@ def snapshot(p):
                   phase=p.read_u32(manager+64),
                   side_word=struct.unpack('<i', p.read(manager+88, 4))[0],
                   participants=[bw(64), bw(68)],
+                  participant_indices=[bw(80), bw(84)],
+                  side_word_meaning='guest tug margin: positive favours side0; negative favours side1; zero tied',
                   counters={name: word(off) for name, off in struggle.TELEMETRY.items()})
     # Read gate inputs only during an observed struggle. These are samples,
     # not a claim that ELIGIBLE accepted/rejected that actor on this frame.
     if values['active'] == 2:
+        policy = struct.unpack('<4I', p.read(struggle.policy.CONTROL, 16))
+        values['ffa'] = policy[0] == struggle.policy.MAGIC and policy[1] == manager and policy[3] == struggle.policy.FFA
         values['participation'] = [p.read_u32(struggle.participation.CONTROL+12),
                                    p.read_u32(struggle.participation.CONTROL+16)]
         values['slots'] = [{name: word(struggle.SLOTS+i*struggle.SLOT_STRIDE+off)
@@ -48,6 +97,7 @@ def snapshot(p):
             row = aw(0x994)
             item = dict(physical=physical, address=at, cpu=aw(0x1278),
                                actions=[aw(off) for off in struggle.throws.ACTION_FIELDS],
+                               hp=aw(0x9E4+164*row) if row < 5 else None,
                                stock=aw(0x9E4+164*row+20) if row < 5 else None,
                                schedule_due=(values['counter']-values['intro']-8-2*physical) >= 0
                                and (values['counter']-values['intro']-8-2*physical) % 32 == 0)
@@ -55,11 +105,21 @@ def snapshot(p):
             if model_id < 12:
                 model = p.read_u32(core.MODELS+4*model_id)
                 if 0x100000 <= model <= 0x8000000-0x1670:
+                    header = struct.unpack('<5I', p.read(model, 20))
+                    item['model_valid'] = header[1] == 1 and header[4] == model_id
                     coords = struct.unpack('<3f', p.read(model+2416, 12))
                     if all(abs(coord) < 1e8 for coord in coords):
                         item['model_position'] = coords
             actors.append(item)
         values['actors'] = actors
+        values['human_struggle_sides'] = [side for side, at in enumerate(values['participants'])
+                                         if any(actor['address'] == at and not actor['cpu'] for actor in actors)]
+        for actor in actors:
+            actor.update(classify(values, actor))
+        values['sample_semantics'] = 'Read-only gate evaluation; not a guest execution receipt'
+        values['counter_after_read'] = p.read_u32(manager+80)
+        if p.read_u32(struggle.beam.CONTROL+24) != values['serial']:
+            return None
     if p.read_u32(core.ACTORS) != manager:
         return None
     return values

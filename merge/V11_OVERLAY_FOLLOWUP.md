@@ -47,3 +47,26 @@ specials after Goku reaches SSJ God are not claimed fixed. Do not bypass
 no-slot, zero-cost/revert, or action/ownership gates without captured evidence.
 No v0.1/v0.2 roster control run has been performed here. Released installer
 and binaries are unchanged.
+
+## Gate-labelled samples (Claude correction)
+
+The user was losing in every observed failed assist. The lead rule is therefore
+not a demonstrated cause. Each actor sample now has sample_gate and
+assist_side, evaluated in the upstream gate order: CPU/option/coordinator,
+struggler, existing pending/releasing slot, participation/HP, requested/queued
+busy actions, unique allied side, free slot, authenticated model, strict flat
+range, current busy action, schedule, lead rule, stock, and REGISTER's ally
+action. ready-at-sample means these sampled checks passed, not that an assist
+was actually requested or confirmed.
+
+human_struggle_sides identifies human participants' side indices. The signed
+manager+88 word is the guest tug margin: positive favours side0, negative
+favours side1, zero tied. This follows tug_code's side0 strength minus side1
+strength and its signed accumulated push, rather than team HP or score.
+Counter-after-read and struggle-serial recheck expose sampling limitations;
+guest execution telemetry remains authoritative for actual requests/results.
+
+Focused tests cover both sign conventions and range, busy, pending, full-slot,
+participation, phase, schedule, stock and registration-action reasons. Private
+trial helper updated while GAME_LOCK and runner processes were absent. No
+gameplay rule or emitted program changed; no runner rebuild needed.
