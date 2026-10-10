@@ -499,7 +499,18 @@ def can_enable(key, settings=None):
 
 
 def help_note(group, settings=None):
-    return tr(notes[group], settings)
+    note = tr(notes[group], settings)
+    if group in ('Beam struggles', 'Revival'):
+        import world_ranges
+        values = validate_settings(settings or {})
+        key = 'beam_assist_range' if group == 'Beam struggles' else 'revive_radius'
+        reach = world_ranges.effective(values, key)
+        scale = world_ranges.map_scale(values)
+        if values['language'] == 'es':
+            note = f'Alcance efectivo: {reach:g} unidades (mapa {scale:g}x). Valor en unidades de mapa 1x. ' + note
+        else:
+            note = f'Effective range: {reach:g} world units ({scale:g}x map). Value uses 1x map units. ' + note
+    return note
 
 
 class SettingsController:

@@ -403,7 +403,7 @@ def validate_memory(ram):
     if u(CONTROL+16)>10000000 or u(CONTROL+16)%100000 or not 8<=u(CONTROL+20)<=1800:
         raise ValueError('Invalid revival preference values')
     radius,radius2=struct.unpack_from('<2f',ram,CONTROL+CFG['radius'])
-    if not math.isfinite(radius) or not 5<=radius<=200 or struct.pack('<f',radius*radius)!=ram[CONTROL+CFG['radius_squared']:CONTROL+CFG['radius_squared']+4]:
+    if not math.isfinite(radius) or not 5<=radius<=400 or struct.pack('<f',radius*radius)!=ram[CONTROL+CFG['radius_squared']:CONTROL+CFG['radius_squared']+4]:
         raise ValueError('Invalid revival radius')
     if (not 2500<=u(CONTROL+CFG['health'])<=100000 or not 8<=u(CONTROL+CFG['recovery'])<=300
         or u(CONTROL+CFG['ring']) not in (0,1) or u(CONTROL+CFG['opacity'])>128):
@@ -467,7 +467,8 @@ def build_memory(ram,settings=None,source='<prepared>'):
     if mode==policy.FFA:return dict(source=str(source),blocks=[],status='REVIVAL NOT USED IN FREE FOR ALL')
     cost=options[preferences.REVIVE_COST_KEY]*100000
     channel=max(1,math.ceil(options[preferences.REVIVE_CHANNEL_KEY]*ACTOR_HZ))
-    radius=struct.unpack('<f',struct.pack('<f',options['revive_radius']))[0]
+    import world_ranges
+    radius=struct.unpack('<f',struct.pack('<f',world_ranges.effective(options,'revive_radius')))[0]
     configured=struct.pack('<2f4I',radius,radius*radius,round(options['revive_health_bars']*10000),
                            math.ceil(options['revive_recovery_seconds']*ACTOR_HZ),int(options['show_revive_ring']),
                            round(options['revive_ring_opacity']*128))

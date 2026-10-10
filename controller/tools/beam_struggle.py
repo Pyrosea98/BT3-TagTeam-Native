@@ -69,6 +69,7 @@ import viewport_hud as hud
 import arena_bounds
 import spawn_placement as terrain
 import mod_settings
+import world_ranges
 from regional import Y_ORIGIN, screen_y
 
 BASE, END = 0x07250000, 0x07258000
@@ -279,7 +280,7 @@ def config_bytes(settings, consts, mask):
     rule = int(ahead > 0)
     clamp = NATIVE_CLAMP if (not rule and s['beam_struggle_length'] != 'native') else 0
     margin = ahead * inc
-    reach = float(s['beam_assist_range'])
+    reach = world_ranges.effective(s, 'beam_assist_range')
     caption = math.ceil(3 * ACTOR_HZ)
     out = bytearray(0x50)
     struct.pack_into('<12I', out, 0, length_limit(s['beam_struggle_length'], intro, limit), rule, clamp, ahead, margin,

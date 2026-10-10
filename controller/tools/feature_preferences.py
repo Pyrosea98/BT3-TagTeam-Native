@@ -138,7 +138,7 @@ OPTIONS = {
     'beam_assist_enabled': (False,'bool',None,None,'Beam struggles','Teammates can assist a beam struggle (R3; 1 blast stock)'),
     'beam_assist_multiplier_percent': (150,'int',110,300,'Beam struggles','Assist multiplier (push and final damage, %)'),
     'beam_assist_cpu': (True,'bool',None,None,'Beam struggles','CPU fighters assist too'),
-    'beam_assist_range': (60,'int',30,150,'Beam struggles','Assist range from the struggling ally (world units)'),
+    'beam_assist_range': (300,'int',30,1500,'Beam struggles','Assist range from the struggling ally (world units)'),
     # ground_locomotion (beta.37, v2 beta.38). Off installs nothing; the others only matter while it is on
     # (ingame_settings DEPENDS). Speeds are % of a natural run (ground_locomotion RUN_BASE/WALK_BASE); tilt 0
     # always runs; size scales the speed by the fighter's legs (ground_legs.py).
