@@ -26,13 +26,17 @@ LABELS=('Team Battle','Free-for-all','Modded Scenarios','Modded Training',
 NATIVE_ROW_LAYOUTS=((0,1,2,3,5,6,7,8,9),(0,1,2,3,5,6,7,8,9,10))
 
 
+class MenuNotReady(ValueError):
+    """A menu pointer has not been published yet; retry before any asset writes."""
+
+
 def u32(r,p):
-    if p<0 or p+4>len(r):raise ValueError('Native menu address out of range')
+    if p<0 or p+4>len(r):raise MenuNotReady(f'Native menu address out of range: address=0x{p:X}, RAM=0x{len(r):X}')
     return struct.unpack('<I',bytes(r[p:p+4]))[0]
 
 
 def span(r,p,n):
-    if p<0x100000 or p+n>len(r):raise ValueError('Invalid native menu asset pointer')
+    if p<0x100000 or p+n>len(r):raise MenuNotReady(f'Invalid native menu asset pointer: address=0x{p:X}, size=0x{n:X}, RAM=0x{len(r):X}')
     return bytes(r[p:p+n])
 
 

@@ -416,7 +416,17 @@ class Controller:
         if not allow_activate:return None
         if self.pending_return_page is None and self.scenarios.quick_document() is not None:
             self.pending_return_page=0
-        plan=owned_plan(ReadOnlyMemory(p),self.settings)
+        try:
+            plan=owned_plan(ReadOnlyMemory(p),self.settings)
+        except assets.MenuNotReady as error:
+            # Scene readiness can precede publication of the label tree.
+            # Planning has no writes: retry instead of disabling this session.
+            message=str(error)
+            if getattr(self,'menu_pointer_wait',None)!=message:
+                print('Native menu waiting for assets: '+message,flush=True)
+                self.menu_pointer_wait=message
+            return None
+        self.menu_pointer_wait=None
         # Assets are staged first. Publish magic last: PINE writes can span
         # multiple commands while guest frames run. No live code/object edits.
         if not ready(p):return None

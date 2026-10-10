@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "runtime_variant": "BT3 Power Scale BETA 1.5.1 (experimental)",
+  "arena_capacity": 1048576,
+  "coverage": "Observed destination footprint only; whole-roster offline allocator calculation pending. File sizes are not effects-arena requirements.",
+  "destinations": [
+    {
+      "cid": 72,
+      "required_bytes": 2089856,
+      "basis": "Native effects allocator receipt from CPU extra 60 -> 72, 20261009-231719; full replacement usage after arena reset.",
+      "status": "blocked-for-extras"
+    }
+  ]
+}

@@ -25,7 +25,8 @@ FORM_ENABLE=requests.CONTROL+24
 # Refusal telemetry: how many ordinary-form commands this service turned away,
 # why the last one was refused (1 fusion reservation, 2 no native model
 # storage, 3 texture groups full, 4 no free resource record, 5 heap admission,
-# whose own reason word is extra_reload_heap.REASON) and whose actor it was.
+# whose own reason word is extra_reload_heap.REASON; 6 effects arena too small)
+# and whose actor it was.
 REFUSALS,REFUSED_REASON,REFUSED_ACTOR=16,20,24
 SAVED=(8,9,10,11,12,13,14,15,16,17,24,25)
 NATIVE=elf_reader(elf_path(ROOT))[2]
@@ -55,6 +56,8 @@ def admission(entry,base,old):
     a.label('scan');a.lw(8,13);a.branch(4,8,4,'native')
     a.addiu(13,13,4);a.addiu(12,12,1);a.branch(5,12,11,'scan');a.jump('fallback')
     a.label('native')
+    import extra_form_size_guard
+    extra_form_size_guard.admission_guard(a,'refuse6','fallback')
     a.li(8,requests.FUSION_CONTROL);a.lw(9,8);a.addiu(10,0,1);a.branch(5,9,10,'not_reserved')
     a.lw(9,8,4);a.lw(10,28,-22364);a.branch(5,9,10,'not_reserved')
     a.call(requests.FUSION_RESERVED);a.branch(5,2,0,'refuse1');a.label('not_reserved')
@@ -81,9 +84,9 @@ def admission(entry,base,old):
     # through to the ordinary guard and the fighter keeps looking for a move it
     # can never start. Record how often, why and for whom, after the actor has
     # been matched so leaders and other modes stay byte-identical.
-    for reason in range(1,6):
+    for reason in range(1,7):
         a.label(f'refuse{reason}');a.addiu(12,0,reason)
-        if reason<5:a.jump('refused')
+        if reason<6:a.jump('refused')
     a.label('refused')
     a.li(8,CONTROL);a.lw(9,8,REFUSALS);a.addiu(9,9,1);a.sw(9,8,REFUSALS)
     a.sw(12,8,REFUSED_REASON);a.sw(4,8,REFUSED_ACTOR)

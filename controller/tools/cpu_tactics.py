@@ -34,6 +34,29 @@ HELP = ('CPU transformations use native stock costs, character exceptions, giant
         'CPU revival and autonomous fusion are not included yet.')
 
 
+def hp_limit():
+    # Captured Power Scale Moro226 has 1,600,000 current AND maximum HP.
+    # Keep a bounded profile-specific ceiling; percent's hp*100 fits 32 bits.
+    import game_profile
+    profile=game_profile.installed()
+    return 10000000 if profile and profile.get('runtime_variant')=='BT3 Power Scale BETA 1.5.1 (experimental)' else 1000000
+
+
+def unsafe_extra_forms():
+    import extra_form_size_guard
+    return extra_form_size_guard.blocked_destinations()
+
+
+def extra_form_guard(a,physical,destination,rejected):
+    denied=unsafe_extra_forms()
+    if not denied:return
+    # t3 is scratch here; preserve destination and the current character ID.
+    a.i(11,11,physical,2);a.branch(5,11,0,'extra_form_allowed')
+    for cid in denied:
+        a.addiu(11,0,cid);a.branch(4,destination,11,rejected)
+    a.label('extra_form_allowed')
+
+
 def frame_code(previous):
     a=Assembler(FRAME);abi.save(a);abi.restore(a,finish=False);a.call(previous);abi.save(a,after=True)
     # Preserve the previous continuation's complete integer/FPU/HI/LO result.
@@ -54,7 +77,7 @@ def model_code():
 
 def percent(a,out,row):
     a.lw(8,row);a.lw(9,row,4);a.branch(6,9,0,'invalid')
-    a.li(10,1000000);a.r(0x2B,10,10,9);a.branch(5,10,0,'invalid')
+    a.li(10,hp_limit());a.r(0x2B,10,10,9);a.branch(5,10,0,'invalid')
     a.r(0x2B,10,9,8);a.branch(5,10,0,'invalid')
     a.addiu(10,0,100);a.r(24,0,8,10);a.r(18,8,0);a.r(26,0,8,9);a.r(18,out,0)
 
@@ -107,7 +130,7 @@ def apply_code(ffa=False,eligibility=0x073F8000,initiation=0x073F8400):
     a.lw(8,21);a.branch(5,8,18,'next');a.lw(8,18);a.branch(5,8,16,'next')
     a.addiu(8,0,1);a.sw(8,24);a.lw(8,18,0x1278);a.addiu(9,0,1);a.branch(5,8,9,'next')
     a.addiu(8,0,3);a.sw(8,24);a.move(4,18);a.call(feed.ROW);a.lw(24,29,0x298);a.branch(4,2,0,'next');a.move(19,2)
-    a.lw(8,19);a.branch(6,8,0,'next');a.li(9,1000000);a.r(0x2B,9,9,8);a.branch(5,9,0,'next')
+    a.lw(8,19);a.branch(6,8,0,'next');a.li(9,hp_limit());a.r(0x2B,9,9,8);a.branch(5,9,0,'next')
     a.lw(8,19,20);a.sw(8,24,12);a.addiu(8,0,4);a.sw(8,24);a.li(8,CONTROL)
     if ffa:a.lw(22,8,16)
     else:
@@ -137,6 +160,7 @@ def apply_code(ffa=False,eligibility=0x073F8000,initiation=0x073F8400):
     a.sw(3,24,16);a.addiu(8,0,10);a.sw(8,24);a.sw(0,24,20);a.sw(0,24,24);a.sw(0,24,28);a.sw(3,21,16);a.addiu(8,0,-1);a.sw(8,21,20);a.sw(0,21,24);a.move(22,0)
     a.label('form');a.r(0x21,8,23,22);a.i(36,9,8,0x98);a.i(11,10,9,253)
     a.branch(4,10,0,'next_form');a.lw(10,21,16);a.branch(4,9,10,'next_form')
+    extra_form_guard(a,16,9,'next_form')
     a.i(36,8,8,0x9C);a.lw(11,24,28);a.addiu(11,11,1);a.sw(11,24,28)
     a.branch(5,8,0,'cost_ok')
     # Zero-cost upward forms are accepted ONLY for reviewed same-family tiers.
@@ -259,6 +283,7 @@ def build_memory(ram,settings=None,source='<prepared>',*,battle_mode='teams',all
     if any(end>lo for (_,end),(lo,_) in zip(spans,spans[1:])):raise ValueError('CPU tactics code overlaps')
     return dict(serial=SERIAL,crc=CRC,source=str(source),control=CONTROL,previous=previous,settings={k:options[k] for k in KEYS},
                 blocks=[dict(address=p,expected_hex=ram[p:p+len(d)].hex(),data_hex=d.hex()) for p,d in pieces],
+                unsafe_extra_destinations=list(unsafe_extra_forms()),
                 telemetry=dict(evaluations=CONTROL+32,starts=CONTROL+36,last_actor=CONTROL+44,last_slot=CONTROL+48))
 
 

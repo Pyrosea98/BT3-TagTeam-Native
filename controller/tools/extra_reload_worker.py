@@ -40,6 +40,51 @@ BACKGROUND_RETRY=(112,130,131)
 def u(ram,p):return struct.unpack_from('<I',ram,p)[0]
 
 
+def audit_form(ram,job,phase,manifest=None):
+    """Optional host-only receipts from existing snapshots; never change guest state."""
+    import os
+    directory=os.environ.get('BT3_FORM_AUDIT_DIR')
+    if not directory or not job.get('form'):return
+    import json
+    from pathlib import Path
+    def read(address):return struct.unpack('<I',ram[address:address+4])[0]
+    def words(address,count):
+        if not 0x100000<=address<=len(ram)-count*4:return None
+        return list(struct.unpack(f'<{count}I',ram[address:address+count*4]))
+    actor=job['actor'];model=job['model'];g=commit.generic
+    resource=read(model+20)
+    receipt=dict(schema=1,phase=phase,job=job,cpu=read(actor+0x1278),
+                 actor_state={hex(off):read(actor+off) for off in
+                              (0x948,0x94C,0x954,0x958,0x95C,0x960,0xD98,0xDAC,0xDB8,0x1278)},
+                 model=words(model,24),resource=resource,resource_header=words(resource,24),
+                 request=words(job['row'],16),generic_control=words(g.CONTROL,40),
+                 generic_record=words(g.RECORDS+(job['physical']-2)*64,16),
+                 generic_row=words(g.ROWS+job['model_id']*48,12),
+                 commit_control=words(commit.CONTROL,24))
+    if manifest:receipt['configuration']=manifest.get('configuration')
+    target=Path(directory);target.mkdir(parents=True,exist_ok=True)
+    name=f"{time.time_ns()}-p{job['physical']}-cid{job['character']}-{phase}.json"
+    (target/name).write_text(json.dumps(receipt,indent=2),encoding='utf-8')
+
+
+def generic_commit_failure(p,manifest):
+    """Read the three distinct status142 predicates without changing guest RAM."""
+    config=manifest.get('configuration',{})
+    g=config.get('generic')
+    if not g:return 'generic configuration unavailable'
+    root=p.read_u32(g['record']+16)
+    used=p.read_u32(g['record']+20)
+    resource=p.read_u32(g['row']+4)
+    capacity=g.get('arena_capacity',commit.generic.ARENA_BYTES)
+    reasons=[]
+    if not root:reasons.append('null-root')
+    if used>capacity:reasons.append('arena-overflow')
+    if not resource:reasons.append('null-row-resource')
+    return (f"generic record=0x{g['record']:08X} row=0x{g['row']:08X} "
+            f"root=0x{root:08X} used={used} capacity={capacity} "
+            f"row_resource=0x{resource:08X} failed={','.join(reasons) or 'not-observed'}")
+
+
 def loader_busy(ram):
     """True while any native loader or task work could take our record/buffers.
 
@@ -493,6 +538,10 @@ class Worker:
             if p.read_u32(runner.CONTROL+8)==request:
                 status=p.read_u32(runner.CONTROL+12)
                 if status!=5 or p.read_u32(control+4)!=5:
+                    if name=='commit' and status==142:
+                        try:self.progress('Extra reload status142: '+generic_commit_failure(p,manifest))
+                        except Exception as diagnostic_error:
+                            self.progress('Extra reload status142 diagnostic unavailable: '+str(diagnostic_error))
                     raise RuntimeError(f'Extra reload {name} failed with status {status}; match remains held')
                 self.timings.append((name+' guest',time.perf_counter()-before))
                 return
@@ -526,7 +575,7 @@ class Worker:
         refusals,reason,actor=struct.unpack('<3I',p.read(form_module.CONTROL+form_module.REFUSALS,12))
         if refusals:
             names={1:'a fusion reservation',2:'native model storage',3:'texture groups',
-                   4:'free resource records',5:'heap space'}
+                   4:'free resource records',5:'heap space',6:'effects arena capacity'}
             return f'{refusals} command(s) refused, last for want of {names.get(reason,reason)}'
         if self.shortage:return self.shortage
         return 'its owner is not idle in a transformation action'
@@ -771,9 +820,11 @@ class Worker:
         except ValueError as error:
             self.progress(f'Transformation staging refused: {error}')
             return self._abort_form(p,130,held=True,orphaned=True)
+        self._audit_form(ram,job,'before-stage',manifest)
         self._install_stage(p,'stage',ram,manifest,job)
         self._group_note(p)
         ram=self._snapshot(p)
+        self._audit_form(ram,job,'after-stage',manifest)
         self.apply(p,dict(blocks=[word_block(ram,job['row']+4,3)]))
         self.form_phase='commit';self.form_frame=p.read_u32(native.CONTROL+40)
         self.form_elapsed=0;self.form_paused=False
@@ -842,8 +893,15 @@ class Worker:
             if candidate(ram,(4,))!=job:raise RuntimeError('Native transformation owner changed before commit; match remains held')
             view=self._analysis_view_for(ram,('commit',))
             manifest=self._build('commit',commit.build_memory,view,quiet=True,retire_staged=True,form=True)
-            self._install_stage(p,'commit',ram,manifest,job)
+            self._audit_form(ram,job,'before-commit',manifest)
+            try:self._install_stage(p,'commit',ram,manifest,job)
+            except Exception:
+                # Preserve the original failure even if obtaining a receipt fails.
+                try:self._audit_form(self._snapshot(p),job,'failed-commit',manifest)
+                except Exception:pass
+                raise
             ram=self._snapshot(p)
+            self._audit_form(ram,job,'after-commit',manifest)
             if (u(ram,commit.AI_META)!=5 or u(ram,commit.CONTROL+36)!=1 or
                     u(ram,job['model']+12)!=job['character']):
                 raise RuntimeError('Native transformation final identity check failed; match remains held')
@@ -873,6 +931,11 @@ class Worker:
             self._install_stage(p,'retire',ram,manifest,job)
             pending.remove(owned);ram=self._snapshot(p)
         return ram
+
+    def _audit_form(self,ram,job,phase,manifest=None):
+        try:audit_form(ram,job,phase,manifest)
+        except Exception as error:
+            self.progress(f'Transformation audit unavailable: {error}')
 
     def _analysis_view_for(self,ram,names):
         owned=self.owned
