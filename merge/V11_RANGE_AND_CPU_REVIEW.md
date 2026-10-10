@@ -62,7 +62,30 @@ cpu-form-review-inventory.json: 30 IDs with reviewed tiers, 223 without, and 48
 observed source/destination slots. These are coverage counts, not 223 broken
 characters. Full-roster forward-slot census has not been captured.
 
-Next review candidates are 60/181/183/184/72, 119/76/167/179/83 and 31/32/33.
-Captured names and forward costs are recorded. Each family still needs live
-transform/hold/revert/stock acceptance before being promoted to reviewed CPU
-tiers. No global guard loosening or new family activation is claimed here.
+## CPU family trial implementation after the ranges live test
+
+Beam assist was confirmed live twice by Claude: each struggle recorded one
+trigger, confirmation, CPU assist, pose and release, with no busy/blocked/hit
+failure. Multiplier effect and further repetition still need acceptance.
+
+Implemented three explicit trial families in cpu_tactics.tables(), scoped to
+the exact Power Scale runtime profile: (31,32,33), (60,181,183,184,72), and
+(119,76,167,179,83). Runtime names and captured forward slots establish the
+proposed upward order. Native admission, stock/chance/giant checks, cooldowns,
+reverse-form refusal and cross-family refusal are retained. This activates
+the candidates only in the isolated next-version trial, not the public release.
+Each family still needs live transform/hold/revert/stock-cost acceptance.
+
+Focused profile/tier checks pass; the production EE planner fixture now tests
+free upgrades and reverse/cross-family refusals for the new families as well
+as the earlier Black/Vegito cases. The captured native admission/stock/chance
+and guarded initiation checks also pass. Actual animation/resource completion
+and concurrent actor behavior are not proved by this offline fixture.
+
+The UI catalogue matches portraits/031.png to ID31 and the full label
+"8.4M-30M-25M-100M", and portraits/060.png to ID60 and "110.000M". ID34
+has "85M-1.250M-100M". ID60's existing mapping is based on name match and
+consistent RAM ordering, while ID31's portrait was found verbatim in RAM.
+The reported screenshot's "120M" differs from the catalogue's "25M";
+the match log establishes the helper's runtime ID31. Era names still are
+not explicit in the captured menu strings.

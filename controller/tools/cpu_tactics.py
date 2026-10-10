@@ -23,6 +23,10 @@ DIAGNOSTICS, DIAG_STRIDE = CONTROL+0x600, 64
 MAGIC = 0x43505431
 INTERVAL = max(1, round(ACTOR_HZ / 3))
 KEYS = ('cpu_transform_allies', 'cpu_transform_enemies', 'cpu_tactics_preset')
+# Local Power Scale trial candidates. Runtime labels and forward slot costs
+# captured in the 2026-10-09 20:48..20:52 session; live acceptance still pending.
+# Tier order authorizes upgrades only, never a reverse or cross-family slot.
+POWER_SCALE_TRIAL_FAMILIES = ((31,32,33), (60,181,183,184,72), (119,76,167,179,83))
 HELP = ('CPU transformations use native stock costs, character exceptions, giant restrictions and chance limits. '
         'Allies means the first player team; free-for-all CPUs are enemies. Native leaves the existing AI unchanged. '
         'When outmatched considers health, ki, recent damage and reviewed form tiers; unknown tiers add no score. '
@@ -180,6 +184,14 @@ def tables():
     # IDs/labels and forward slots verified in the user's20261008-13 captures.
     for family,forms in enumerate(((3,4,5,6),(34,35,36,20),(44,45),(46,47)),3):
         for tier,cid in enumerate(forms):tiers[cid]=tier;families[cid]=family
+    import game_profile
+    profile=game_profile.installed()
+    if profile and profile.get('runtime_variant')=='BT3 Power Scale BETA 1.5.1 (experimental)':
+        for forms in POWER_SCALE_TRIAL_FAMILIES:
+            family=max(families)+1
+            for tier,cid in enumerate(forms):
+                if families[cid]:raise ValueError('Conflicting Power Scale CPU trial family')
+                tiers[cid]=tier;families[cid]=family
     # Expanded zero-cost upgrades: review names AND forward slots. Slot order
     # alone cannot distinguish reverts, alternate forms or fusion bodies.
     reviewed=json.loads(Path(__file__).with_name('cpu_transform_form_tiers.json').read_text(encoding='utf-8'))
