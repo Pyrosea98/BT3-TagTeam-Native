@@ -1,0 +1,12 @@
+{
+  "version": "0.4.1",
+  "engine": "Tenkaichi3Decomp Tag Team / Real Power Scale",
+  "runtime": {
+    "Tenkaichi3Decomp.exe": "0c7f567cefb9e6177fd69f74f90ab8c3ecfb5a519fff8c42481dbe4c33675354",
+    "Tenkaichi3Decomp.exe.mem": "7bec8e2ad813353d3b8d27f71f246ce6dff0d2ed407ab33f5b240eff22573c89",
+    "Tenkaichi3Decomp.dat": "2c5ba1e3bddb7e8684662d83340fab0fa1cba1cbf6816924229c6ffa5c10840f"
+  },
+  "content_manifest_sha256": "63802e4de080c781720642565f5c27bb6bf8f7222ddd6bbcb309bb2158b8df5e",
+  "source_build_receipt_sha256": "6754ec4ee4dc15f62b6d79d708b8082389a14cb7503151dc642433a78d3056ba",
+  "android": "Separate artifact maintained by Claude; not bundled in this Windows setup"
+}

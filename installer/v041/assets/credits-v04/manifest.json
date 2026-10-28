@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "status": "PACKAGED_CREDITS_ASSETS_UI_BUILD_PENDING",
+  "files": {
+    "brand.png": "989cd33f681f0233c0e21afa6e160cd22f4043c9c0957d1ccc74fe07707cc655",
+    "credits-en.png": "f8b91f414b5b8ebe1346939c4932db2b35132fa84e4498e7b569c3667eae0c4b",
+    "credits-es.png": "ff374c548dcd0e05e49e2b6b87aebe64f473523b0cbad7a0ed9094a962edde1e",
+    "credits.json": "7cde9fd498c7b9038bf5117ca1f427233a148029445e0b4a72c3d56b89bde506",
+    "index.html": "d08f4e5f337a074d797276b7087303eaa6e69617cb4977e50f1d1ca88c7682fc",
+    "thanks-en.png": "e72ec6c176bfd0f3802d58c9cd08a4f5beabb577a8a7dad876e05294fad74e32",
+    "thanks-es.png": "b69ac77e4e902849f90cbe02201e7e96a5ea6ab98d39f5b995318b5700058c4d"
+  },
+  "requirements": [
+    "Installer/import cycles credits and thanks while preparation runs",
+    "Game startup shows both without skipping original ISO/publisher cards",
+    "Mod Settings/System/Credits remains accessible with controller and links",
+    "Shared EN/ES source; contain images on 4:3 16:9 21:9; no forced startup delay"
+  ]
+}

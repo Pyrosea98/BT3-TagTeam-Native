@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "contributors": [
+    {
+      "role": "Power Scale",
+      "name": "LetsPlayBt3",
+      "url": "https://www.youtube.com/channel/UCXiHmLmbgaSsFGrfejXESYw"
+    },
+    {
+      "role": "Tag Team",
+      "name": "The Mufti",
+      "url": "https://www.youtube.com/channel/UCY79wsRvOdzBoe8GS77HY0A"
+    },
+    {
+      "role": "Special thanks",
+      "role_es": "Agradecimiento especial",
+      "name": "RidJuampa",
+      "url": "https://www.youtube.com/@RidJuampa"
+    },
+    {
+      "role": "Native port",
+      "role_es": "Port nativo",
+      "name": "z3xox and contributors",
+      "name_es": "z3xox y colaboradores",
+      "url": "https://github.com/z3xox/Tenkaichi3Decomp"
+    }
+  ],
+  "thanks": {
+    "en": "Special thanks to RidJuampa for helping me understand the code.",
+    "es": "Agradecimiento especial a RidJuampa por ayudarme a entender el código."
+  },
+  "screens": [
+    "credits",
+    "thanks"
+  ],
+  "fit": "contain",
+  "background": "#000000",
+  "slide_seconds": 5
+}

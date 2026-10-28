@@ -1,3 +1,15 @@
+# BT3 Tag Team + Real Power Scale — v0.4.1
+
+[Download the PC installer](https://github.com/Pyrosea98/BT3-TagTeam-Native/releases/tag/v0.4.1) · [Current native source](https://github.com/Pyrosea98/BT3-TagTeam-Runtime/tree/decomp-native) · [Installer source/build instructions](installer/v041/BUILD.md)
+
+The current release uses Tenkaichi3Decomp and Power Scale BETA 8. Choose normal or optional 2× maps during setup; both retain the current fixes. Import your own supported ISO. English/Spanish manuals, recommended settings and an unlocked-save option are included; existing progress and settings are preserved. Android is released separately.
+
+The installer shows the shared credits and thank-you pages while preparing the game, at startup and in mod settings. Special thanks to [RidJuampa](https://www.youtube.com/@RidJuampa) for helping me understand the code. See the release notes and included upstream/component notices for full credits.
+
+The sections below document the previous runtime and releases, retained for existing users. Do not combine their data or installers with v0.4.1.
+
+---
+
 # BT3 Tag Team Native
 
 A standalone Windows build of **Dragon Ball Z: Budokai Tenkaichi 3 (Power Scale BETA 1.5.1)** with the **Tag Team mod** built in. It runs on a native static-recompilation runtime instead of an emulator, with the mod's logic embedded, a native Vulkan interface (overhead HUD, fusion and revive indicators, menus, credits), up to five fighters per side, free-for-all, co-op and Modded Training, native CPU tactics, and an installer that imports **your own** disc image.
