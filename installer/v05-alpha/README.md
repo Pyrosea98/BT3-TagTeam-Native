@@ -1,3 +1,5 @@
+> New: standalone installers and consent-based channels are documented in [installer/v05](../v05/README.md). This folder retains the earlier alpha packaging implementation.
+
 BT3 TAG TEAM + REAL POWER SCALE — 0.5.alpha revision (2026-11-07)
 
 Close the game, extract this ZIP, run Update.cmd, and choose the existing installation folder containing Play.exe. Supports 0.4.1 and earlier completed 0.5.alpha installs. Keep using the same launcher. No fresh extraction is needed for a compatible imported ISO.
