@@ -1,15 +1,12 @@
-# 0.5.alpha — PC update
+BT3 TAG TEAM + REAL POWER SCALE — 0.5.alpha revision (2026-11-07)
 
-Experimental prerelease. Requires an existing supported 0.4.1 Windows installation with its ISO already imported. Extract the update ZIP, run Update.cmd, and enter that installation folder (the folder containing Play.exe). Close the game first. Continue using the same Play.exe afterwards.
+Close the game, extract this ZIP, run Update.cmd, and choose the existing installation folder containing Play.exe. Supports 0.4.1 and earlier completed 0.5.alpha installs. Keep using the same launcher. No fresh extraction is needed for a compatible imported ISO.
 
-The update verifies touched inputs and payload hashes before replacing files, keeps rollback copies, and preserves saves, achievements, controller settings and the normal/2x map choice. If a file was manually modified or the base version is unsupported, it stops without replacing files. It does not include or alter any ISO.
+This revision adds Ginyu's actual-hit body exchange and the English/Spanish text audit. Existing saves, achievements, settings, bindings and normal/2x map choice are preserved. Inputs and reconstructed files are verified before replacement; rollback copies are retained. Applying the same revision again verifies the package files and makes no changes.
 
-New users: install 0.4.1 and import a supported ISO first, then apply this update. New ISO revisions need an explicit import/update recipe. A changed ISO does not require reinstalling the launcher, but may require importing compatible game data again. Do not combine an arbitrary ISO with this runtime.
+Ginyu keeps the normal successful-hit cinematic. Bodies exchange costumes, remaining health, Ki, stocks and stats; players keep their controls and teams. Stolen-body special-technique restrictions remain as in the original move. Online/replays retain their original rules. In-fight fused bodies are not exchanged because they own a separate consumed-partner/timer lifecycle.
 
-This alpha includes the Saiyan Dragon History arc and newer menus/Scenarios. Namek unlocks as coming soon, without playable chapters yet. Story-required defeats permit progress; victory trophies require wins in every chapter. Hard victories count for lower difficulties. The first-saga farewell and audible reward notification are included.
+Experimental PC alpha. No new playable Namek chapters or APK is included. New installations: install 0.4.1 and import a supported ISO, then apply this update. New ISO revisions need a compatible import recipe; do not replace extracted data arbitrarily.
 
-Code: https://github.com/Pyrosea98/BT3-TagTeam-Runtime/tree/v0.5-alpha
-Stable base installer: https://github.com/Pyrosea98/BT3-TagTeam-Native/releases/tag/v0.4.1
-Android: separate build; this package updates PC only.
-
-ES: Actualizacion experimental para una instalacion 0.4.1 compatible. Extrae el ZIP, ejecuta Update.cmd e indica la carpeta donde esta Play.exe. Se conservan partidas, logros, ajustes y mapas normales/2x. No contiene una ISO ni hace falta extraerla de nuevo. Namek se desbloquea como proximamente; aun no tiene capitulos jugables.
+ESPAÑOL
+Cierra el juego, extrae el ZIP, ejecuta Update.cmd e indica la carpeta de tu instalación 0.4.1 o 0.5.alpha. Se conservan partidas, logros, ajustes y mapas normales/2x. No necesitas reinstalar ni volver a extraer una ISO compatible. Esta revisión incluye el intercambio real de cuerpos de Ginyu y las correcciones de textos en inglés y español.

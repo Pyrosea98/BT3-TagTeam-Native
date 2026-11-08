@@ -1,4 +1,4 @@
-"""Verified 0.4.1 -> 0.5.alpha update. Never writes saves/settings or changes ISO files."""
+"""Verified 0.4.1 / earlier 0.5.alpha -> current 0.5.alpha update. Never writes saves/settings or changes ISO files."""
 from pathlib import Path,PurePosixPath
 import argparse,hashlib,json,os,shutil,zlib,uuid,sys
 VERSION='0.5.alpha'
@@ -24,10 +24,8 @@ def apply(app,bundle,check=False):
   (work/'ROLLED_BACK').write_text('Recovered interrupted update')
  manifest=json.loads((bundle/'update.json').read_text());profile=json.loads((app/'release-profile.json').read_text())
  data=(app/'data-root.txt').read_text(encoding='utf-8-sig').strip() if (app/'data-root.txt').exists() else str(app/'data');data=Path(data).expanduser().resolve()
- if profile['version']==VERSION:
-  if (app/'alpha-update-receipt.json').exists():print('Already updated to '+VERSION);return
-  raise ValueError('Alpha profile without completed update receipt')
- if profile['version'] not in manifest['from_versions']:raise ValueError('This updater requires a supported 0.4.1 installation; different versions need their own recipe')
+ if profile['version']==VERSION and not (app/'alpha-update-receipt.json').exists():raise ValueError('Alpha profile without completed update receipt')
+ if profile['version'] not in manifest['from_versions']:raise ValueError('This updater requires a supported 0.4.1 or completed 0.5.alpha installation; different versions need their own recipe')
  receipt=json.loads((data/'gamedata/import-receipt.json').read_text())
  roots={'app':app,'data':data};records=manifest['files'];plans=[]
  # Verify every touched input before replacing a single file. Custom changes fail closed.
@@ -45,6 +43,7 @@ def apply(app,bundle,check=False):
   plans.append((r,dest,raw))
   if i%1000==0:print('Verified',i,'/',len(records),flush=True)
  if check:print('PASS preflight;',len(plans),'files ready; no files modified');return
+ if not plans:print('Already running this 0.5.alpha revision; verified all package files');return
  # Reject a running game, including processes whose cwd is outside the installation.
  if os.name=='nt':
   import subprocess
@@ -59,7 +58,7 @@ def apply(app,bundle,check=False):
    if e['existed']:shutil.copy2(dest,e['backup'])
    e['started']=True;(work/'journal.json').write_text(json.dumps(journal))
    os.replace(e['new'],dest);e['done']=True;(work/'journal.json').write_text(json.dumps(journal))
-  (app/'alpha-update-receipt.json').write_text(json.dumps(dict(version=VERSION,files=len(plans),backup=str(work),source_import=receipt),indent=2))
+  (app/'alpha-update-receipt.json').write_text(json.dumps(dict(version=VERSION,revision=manifest.get('revision'),files=len(plans),backup=str(work),source_import=receipt),indent=2))
   (work/'COMPLETED').write_text(VERSION)
  except BaseException:
   for e in reversed(journal):
