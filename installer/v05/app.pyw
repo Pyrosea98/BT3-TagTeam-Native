@@ -54,7 +54,7 @@ def main():
         print('PASS package/runtime/manifest identities; game not launched');return 0
     if(DATA/'gamedata/import-receipt.json').exists():
         seed_settings(LANG,CHOICES.get('recommended',True));return play()
-    root=tk.Tk();root.title('BT3 Tag Team + Real Power Scale 0.5.alpha');root.configure(bg='#000000');root.geometry('900x'+str(min(850,int(root.winfo_screenheight()*.9))));root.minsize(640,500)
+    root=tk.Tk();root.title('BT3 Tag Team + Real Power Scale 0.5.alpha.1');root.configure(bg='#000000');root.geometry('900x'+str(min(850,int(root.winfo_screenheight()*.9))));root.minsize(640,500)
     try:root.iconbitmap(str(APP/'assets/BT3TagTeam.ico'))
     except tk.TclError:pass
     lang=tk.StringVar(value=LANG);expanded=tk.BooleanVar(value=CHOICES.get('expanded_maps',True));recommended=tk.BooleanVar(value=CHOICES.get('recommended',True));completed=tk.BooleanVar(value=CHOICES.get('completed_save',True))
