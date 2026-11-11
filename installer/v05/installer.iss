@@ -1,9 +1,9 @@
-#define AppVersion "0.5.alpha.2"
+#define AppVersion "0.5.alpha.3"
 [Setup]
 AppId=BT3TagTeam-Native-v05
 AppName=BT3 Tag Team + Real Power Scale
 AppVersion={#AppVersion}
-VersionInfoVersion=0.5.0.2
+VersionInfoVersion=0.5.0.3
 DefaultDirName={localappdata}\Programs\BT3TagTeam-v05
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -11,7 +11,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=payload\assets\BT3TagTeam.ico
 UninstallDisplayIcon={app}\Play.exe
 OutputDir=release
-OutputBaseFilename=BT3-TagTeam-v0.5.alpha.2-Windows-Setup
+OutputBaseFilename=BT3-TagTeam-v0.5.alpha.3-Windows-Setup
 Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern dark
@@ -53,10 +53,10 @@ Name: "startmenuicon"; Description: "{cm:StartMenuShortcut}"
 [Files]
 Source: "payload\*"; DestDir: "{app}"; Excludes: "data\*,__pycache__\*,*.pyc,*.pyo"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{autodesktop}\BT3 Tag Team v0.5.alpha.2"; Filename: "{app}\Play.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userprograms}\BT3 Tag Team v0.5.alpha.2\Play"; Filename: "{app}\Play.exe"; WorkingDir: "{app}"; Tasks: startmenuicon
-Name: "{userprograms}\BT3 Tag Team v0.5.alpha.2\{cm:Manual}"; Filename: "{code:ManualPath}"; Tasks: startmenuicon
-Name: "{userprograms}\BT3 Tag Team v0.5.alpha.2\Check for updates"; Filename: "{app}\Play.exe"; Parameters: "--updates"; WorkingDir: "{app}"; Tasks: startmenuicon
+Name: "{autodesktop}\BT3 Tag Team v0.5.alpha.3"; Filename: "{app}\Play.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{userprograms}\BT3 Tag Team v0.5.alpha.3\Play"; Filename: "{app}\Play.exe"; WorkingDir: "{app}"; Tasks: startmenuicon
+Name: "{userprograms}\BT3 Tag Team v0.5.alpha.3\{cm:Manual}"; Filename: "{code:ManualPath}"; Tasks: startmenuicon
+Name: "{userprograms}\BT3 Tag Team v0.5.alpha.3\Check for updates"; Filename: "{app}\Play.exe"; Parameters: "--updates"; WorkingDir: "{app}"; Tasks: startmenuicon
 [Run]
 Filename: "{code:ManualPath}"; Description: "{cm:Manual}"; Flags: postinstall shellexec skipifsilent unchecked
 Filename: "{app}\Play.exe"; Description: "{cm:Launch}"; WorkingDir: "{app}"; Flags: postinstall nowait skipifsilent unchecked

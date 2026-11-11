@@ -1,15 +1,15 @@
 [Setup]
 AppId=BT3TagTeam-Update-v05
 AppName=BT3 Tag Team — Update
-AppVersion=0.5.alpha.2
-VersionInfoVersion=0.5.0.2
+AppVersion=0.5.alpha.3
+VersionInfoVersion=0.5.0.3
 DefaultDirName={localappdata}\Programs\BT3TagTeam-v041
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=payload\assets\BT3TagTeam.ico
 OutputDir=release
-OutputBaseFilename=BT3-TagTeam-v0.5.alpha.2-Windows-Update-Setup
+OutputBaseFilename=BT3-TagTeam-v0.5.alpha.3-Windows-Update-Setup
 Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern dark
