@@ -5,7 +5,7 @@ from PIL import Image,ImageTk,ImageOps
 class CreditsPanel(tk.Canvas):
  def __init__(self,parent,assets,language=lambda:'en',**kw):
   super().__init__(parent,bg='black',highlightthickness=0,**kw)
-  self.assets=Path(assets);self.language=language;self.started=time.monotonic();self.photo=None
+  self.assets=Path(assets);self.testers="  /  ".join(json.loads((self.assets/"credits.json").read_text(encoding="utf-8")).get("testers",[]));self.language=language;self.started=time.monotonic();self.photo=None
   self.cards={(page,lang):Image.open(self.assets/(page+'-'+lang+'.png')).convert('RGB') for page in ('credits','thanks') for lang in ('en','es')}
   self.bind('<Configure>',lambda e:self.redraw());self.bind('<Button-1>',self.next_page);self.job=self.after(100,self.tick)
  def next_page(self,event=None):self.started-=5;self.redraw()
@@ -13,6 +13,7 @@ class CreditsPanel(tk.Canvas):
   lang='es'if self.language()=='es'else'en';page=('credits','thanks')[int((time.monotonic()-self.started)//5)%2]
   w=max(1,self.winfo_width());h=max(1,self.winfo_height());im=ImageOps.contain(self.cards[page,lang],(w,h),Image.Resampling.LANCZOS)
   self.photo=ImageTk.PhotoImage(im);self.delete('all');self.create_image(w/2,h/2,image=self.photo)
+  if self.testers:self.create_text(w/2,h-12,text=self.testers,fill="#ffcf55",font=("Segoe UI",max(8,min(13,w//75))))
  def tick(self):
   if not self.winfo_exists():return
   self.redraw();self.job=self.after(500,self.tick)
