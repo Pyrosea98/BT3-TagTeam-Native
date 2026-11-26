@@ -25,7 +25,21 @@ def seed_settings(language,recommended):
             if p.is_file()and not dst.exists():
                 with dst.open('xb')as f:f.write(p.read_bytes())
 def game_environment():
-    env={k:v for k,v in os.environ.items() if not k.startswith(('BT3_','PS2X_','PS2_'))};env.update(BT3_DATA=str(DATA/'gamedata'),BT3_SETTINGS=str(DATA/'bt3_settings.txt'),BT3_SAVES=str(DATA/'saves'),BT3_GPU_API='vulkan');return env
+    env = {key: value for key, value in os.environ.items()
+           if not key.upper().startswith(('BT3_', 'PS2X_', 'PS2_'))}
+    env.update(
+        BT3_DATA=str(DATA / 'gamedata'),
+        BT3_SETTINGS=str(DATA / 'bt3_settings.txt'),
+        BT3_SAVES=str(DATA / 'saves'),
+        BT3_GPU_API='vulkan',
+        BT3_STAGES=str(APP / 'stages'),
+        BT3_SONGS=str(APP / 'songs-esencia'),
+        BT3_STORY_LIBRARY='1',
+        BT3_STORY_SBC_REFERENCE='1',
+        BT3_TEST_PULSE_OPT='1',
+        BT3_FRAME_SKIP='0',
+    )
+    return env
 def prepare_release():
     bundle=APP/'bootstrap/payload'
     if bundle.is_dir() and not (APP/'alpha-update-receipt.json').exists():
@@ -38,6 +52,8 @@ def play():
     run(APP,automatic=True)
     if not (DATA/'gamedata/import-receipt.json').is_file():raise RuntimeError('Complete ISO import first')
     profile=json.loads((APP/'release-profile.json').read_text())
+    from expanded_maps import prepare
+    prepare(APP, DATA, profile)
     from importer import digest
     for name,h in profile['runtime'].items():
         if digest(APP/name)!=h:raise RuntimeError('Game program failed verification: '+name)
@@ -54,7 +70,7 @@ def main():
         print('PASS package/runtime/manifest identities; game not launched');return 0
     if(DATA/'gamedata/import-receipt.json').exists():
         seed_settings(LANG,CHOICES.get('recommended',True));return play()
-    root=tk.Tk();root.title('BT3 Tag Team + Real Power Scale 0.5.alpha.3');root.configure(bg='#000000');root.geometry('900x'+str(min(850,int(root.winfo_screenheight()*.9))));root.minsize(640,500)
+    root=tk.Tk();root.title('BT3 Tag Team + Real Power Scale 0.5.alpha.esencia');root.configure(bg='#000000');root.geometry('900x'+str(min(850,int(root.winfo_screenheight()*.9))));root.minsize(640,500)
     try:root.iconbitmap(str(APP/'assets/BT3TagTeam.ico'))
     except tk.TclError:pass
     lang=tk.StringVar(value=LANG);expanded=tk.BooleanVar(value=CHOICES.get('expanded_maps',True));recommended=tk.BooleanVar(value=CHOICES.get('recommended',True));completed=tk.BooleanVar(value=CHOICES.get('completed_save',True))
